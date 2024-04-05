@@ -177,7 +177,7 @@ class Trader:
                     orders.append(Order("AMETHYSTS", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
                 elif ask_limit > 0:
-                    orders.append(Order("AMETHYSTS", math.floor(buy_price), ask_limit))
+                    orders.append(Order("AMETHYSTS", math.floor(buy_price - std * 1.2), ask_limit))
                     break
 
         if len(order_depth.buy_orders) != 0:
@@ -189,7 +189,7 @@ class Trader:
                     orders.append(Order("AMETHYSTS", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
                 elif bid_limit > 0:
-                    orders.append(Order("AMETHYSTS", math.ceil(sell_price), -bid_limit))
+                    orders.append(Order("AMETHYSTS", math.ceil(sell_price + std * 1.2), -bid_limit))
                     break
 
         return orders
