@@ -98,33 +98,16 @@ class Trader:
     MAX_HISTORY_LENGTH = 30000
     TIMESTAMP_INTERVAL = 100
 
-    def mean_price(self, price_history, initial_mean=0, initial_weight=1):
-        total = initial_mean * initial_weight
-        count = initial_weight
-        for price in price_history:
-            total += price["price"]
-            count += 1
-
-        return total / count
-
-    def stddev_price(self, price_history, mean, initial_pop_size=1):
+    def moving_average(self, price_history, history_length, curr_timestamp, initial_avg=0, initial_length=1):
         total = 0
-        count = initial_pop_size
+        count = 0
 
-        for price in price_history:
-            total += (price["price"] - mean) ** 2
-            count += 1
-
-        return np.sqrt(total / count)
-
-    def moving_average(self, price_history, history_length, curr_timestamp, initial_avg=0, initial_weight=1):
-        total = initial_avg * initial_weight
-        count = initial_weight
+        if len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
+            count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
+            total = initial_avg * count
 
         for trade in price_history:
             if trade["timestamp"] < curr_timestamp - history_length:
-                total = 0
-                count = 0  # have enough data points to disregard initial
                 continue
 
             total += trade["price"]
@@ -132,13 +115,16 @@ class Trader:
 
         return total / count
 
-    def moving_stddev(self, price_history, history_length, curr_timestamp, mean, initial_pop_size=1):
+    def moving_stddev(self, price_history, history_length, curr_timestamp, mean, initial_pop_size=1, initial_sqr_residual=0.0):
         total = 0
-        count = initial_pop_size
+        count = 0
+
+        if len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
+            count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
+            total = initial_sqr_residual * count
 
         for trade in price_history:
             if trade["timestamp"] < curr_timestamp - history_length:
-                count = 0  # have enough data points to disregard initial
                 continue
 
             total += (trade["price"] - mean) ** 2
@@ -173,7 +159,7 @@ class Trader:
 
         mean = self.moving_average(price_history["AMETHYSTS"], 8000, state.timestamp, 10000, 200)
         std = self.moving_stddev(price_history["AMETHYSTS"], 8000, state.timestamp, mean, 200)
-        logger.print(f"mean is {mean} | std is {std}")
+        logger.print(f"Amethyst mean is {mean} | std is {std}")
 
         buy_price = mean - std
         sell_price = mean + std
@@ -214,13 +200,14 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) == 0:
             return orders
 
+        mean = self.moving_average(all_trade_history["STARFRUIT"], 6000, state.timestamp, 5000, 100)
+        std = self.moving_stddev(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean, 100, 3)
+        logger.print(f"Starfruit mean is {mean} | std is {std}")
+
         m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
-        # m1, b1 = self.lin_regression(all_trade_history["STARFRUIT"], 30000, state.timestamp)
-        logger.print(f"slope1 for starfruit is {m} at time {state.timestamp}")
-        # logger.print(f"slope2 for starfruit is {m1} at time {state.timestamp}")
+        logger.print(f"Starfruit slope is {m}")
 
         predicted_price = m * (state.timestamp + self.TIMESTAMP_INTERVAL) + b
-        # overall_predicted_price = m1 * (state.timestamp + self.TIMESTAMP_INTERVAL) + b1
 
         curr_pos = state.position["STARFRUIT"] if "STARFRUIT" in state.position else 0
         ask_limit = self.POSITION_LIMITS["STARFRUIT"] - curr_pos
@@ -230,24 +217,24 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and m > 0 and int(ask) < predicted_price:
+                if ask_limit > 0 and m > 0 and int(ask) < predicted_price - std / 2:
                     logger.print(f"STARFRUIT BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
                 elif ask_limit > 0:
-                    orders.append(Order("STARFRUIT", math.floor(predicted_price) - 1, ask_limit))
+                    orders.append(Order("STARFRUIT", math.floor(predicted_price - std), ask_limit))
                     break
 
         if len(order_depth.buy_orders) != 0:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and m < 0 and int(bid) > predicted_price:
+                if bid_limit > 0 and m < 0 and int(bid) > predicted_price + std / 2:
                     logger.print(f"STARFRUIT SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
                 elif bid_limit > 0:
-                    orders.append(Order("STARFRUIT", math.ceil(predicted_price) + 1, -bid_limit))
+                    orders.append(Order("STARFRUIT", math.ceil(predicted_price + std), -bid_limit))
                     break
 
         return orders
