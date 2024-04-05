@@ -146,8 +146,11 @@ class Trader:
 
         return np.sqrt(total / count)
 
-    def lin_regression(self, price_history, history_length, curr_timestamp):
+    def lin_regression(self, price_history, history_length, curr_timestamp, pad_beginning=False):
         considered_trades = []
+        if pad_beginning and price_history[0]["timestamp"] > curr_timestamp - history_length:
+            considered_trades.extend([(i, price_history[0]["price"]) for i in range(curr_timestamp - history_length, price_history[0]["timestamp"], self.TIMESTAMP_INTERVAL)])
+
         for trade in price_history:
             if trade["timestamp"] < curr_timestamp - history_length:
                 continue
@@ -168,8 +171,8 @@ class Trader:
         if "AMETHYSTS" not in price_history or len(price_history["AMETHYSTS"]) == 0:
             return orders
 
-        mean = self.moving_average(price_history["AMETHYSTS"], 20000, state.timestamp, 10000, 2000)
-        std = self.moving_stddev(price_history["AMETHYSTS"], 20000, state.timestamp, mean, 2000)
+        mean = self.moving_average(price_history["AMETHYSTS"], 8000, state.timestamp, 10000, 200)
+        std = self.moving_stddev(price_history["AMETHYSTS"], 8000, state.timestamp, mean, 200)
         logger.print(f"mean is {mean} | std is {std}")
 
         buy_price = mean - std
@@ -208,8 +211,7 @@ class Trader:
     def starfruit_algo(self, state, order_depth, all_trade_history):
         orders: List[Order] = []
 
-        if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) == 0 or \
-                all_trade_history["STARFRUIT"][0]["timestamp"] > state.timestamp - 5000:
+        if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) == 0:
             return orders
 
         m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
