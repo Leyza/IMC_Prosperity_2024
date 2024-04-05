@@ -98,11 +98,11 @@ class Trader:
     MAX_HISTORY_LENGTH = 30000
     TIMESTAMP_INTERVAL = 100
 
-    def moving_average(self, price_history, history_length, curr_timestamp, initial_avg=0, initial_length=1):
+    def moving_average(self, price_history, history_length, curr_timestamp, initial_avg=0, pad_beginning=True):
         total = 0
         count = 0
 
-        if len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
+        if pad_beginning and len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
             count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
             total = initial_avg * count
 
@@ -115,11 +115,11 @@ class Trader:
 
         return total / count
 
-    def moving_stddev(self, price_history, history_length, curr_timestamp, mean, initial_pop_size=1, initial_sqr_residual=0.0):
+    def moving_stddev(self, price_history, history_length, curr_timestamp, mean, initial_sqr_residual=0.0, pad_beginning=True):
         total = 0
         count = 0
 
-        if len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
+        if pad_beginning and len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
             count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
             total = initial_sqr_residual * count
 
@@ -157,8 +157,8 @@ class Trader:
         if "AMETHYSTS" not in price_history or len(price_history["AMETHYSTS"]) == 0:
             return orders
 
-        mean = self.moving_average(price_history["AMETHYSTS"], 8000, state.timestamp, 10000, 200)
-        std = self.moving_stddev(price_history["AMETHYSTS"], 8000, state.timestamp, mean, 200)
+        mean = self.moving_average(price_history["AMETHYSTS"], 8000, state.timestamp, 10000)
+        std = self.moving_stddev(price_history["AMETHYSTS"], 8000, state.timestamp, mean, 1.2)
         logger.print(f"Amethyst mean is {mean} | std is {std}")
 
         buy_price = mean - std
@@ -200,14 +200,15 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) == 0:
             return orders
 
-        mean = self.moving_average(all_trade_history["STARFRUIT"], 6000, state.timestamp, 5000, 100)
-        std = self.moving_stddev(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean, 100, 3)
+        mean = self.moving_average(all_trade_history["STARFRUIT"], 6000, state.timestamp, 5001)
+        std = self.moving_stddev(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean, 3.5)
         logger.print(f"Starfruit mean is {mean} | std is {std}")
 
         m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
         logger.print(f"Starfruit slope is {m}")
 
         predicted_price = m * (state.timestamp + self.TIMESTAMP_INTERVAL) + b
+        logger.print(f"Starfruit predicted price is {predicted_price}")
 
         curr_pos = state.position["STARFRUIT"] if "STARFRUIT" in state.position else 0
         ask_limit = self.POSITION_LIMITS["STARFRUIT"] - curr_pos
@@ -217,7 +218,7 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and m > 0 and int(ask) < predicted_price - std / 2:
+                if ask_limit > 0 and int(ask) < predicted_price - std * 0.2:
                     logger.print(f"STARFRUIT BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
@@ -229,7 +230,7 @@ class Trader:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and m < 0 and int(bid) > predicted_price + std / 2:
+                if bid_limit > 0 and int(bid) > predicted_price + std * 0.2:
                     logger.print(f"STARFRUIT SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
