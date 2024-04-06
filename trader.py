@@ -98,7 +98,7 @@ class Trader:
     MAX_HISTORY_LENGTH = 30000
     TIMESTAMP_INTERVAL = 100
 
-    def moving_average(self, price_history, history_length, curr_timestamp, initial_avg=0, pad_beginning=True):
+    def moving_average(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
         total = 0
         count = 0
 
@@ -115,7 +115,7 @@ class Trader:
 
         return total / count
 
-    def moving_stddev(self, price_history, history_length, curr_timestamp, mean, initial_sqr_residual=0.0, pad_beginning=True):
+    def volatility(self, price_history, history_length, curr_timestamp, mean, pad_beginning=False, initial_sqr_residual=0.0):
         total = 0
         count = 0
 
@@ -157,8 +157,8 @@ class Trader:
         if "AMETHYSTS" not in price_history or len(price_history["AMETHYSTS"]) == 0:
             return orders
 
-        mean = self.moving_average(price_history["AMETHYSTS"], 10000, state.timestamp, 10000)
-        std = self.moving_stddev(price_history["AMETHYSTS"], 8000, state.timestamp, mean, 1.2)
+        mean = self.moving_average(price_history["AMETHYSTS"], 10000, state.timestamp, True, 10000)
+        std = self.volatility(price_history["AMETHYSTS"], 8000, state.timestamp, mean, True, 1.2)
         logger.print(f"Amethyst mean is {mean} | std is {std}")
 
         buy_price = mean - std
@@ -200,8 +200,8 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) == 0:
             return orders
 
-        mean = self.moving_average(all_trade_history["STARFRUIT"], 6000, state.timestamp, 5001)
-        std = self.moving_stddev(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean, 3.5)
+        mean = self.moving_average(all_trade_history["STARFRUIT"], 6000, state.timestamp, False, 5001)
+        std = self.volatility(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean, True, 3.5)
         logger.print(f"Starfruit mean is {mean} | std is {std}")
 
         m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
