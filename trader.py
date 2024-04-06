@@ -157,7 +157,7 @@ class Trader:
         if "AMETHYSTS" not in price_history or len(price_history["AMETHYSTS"]) == 0:
             return orders
 
-        mean = self.moving_average(price_history["AMETHYSTS"], 8000, state.timestamp, 10000)
+        mean = self.moving_average(price_history["AMETHYSTS"], 10000, state.timestamp, 10000)
         std = self.moving_stddev(price_history["AMETHYSTS"], 8000, state.timestamp, mean, 1.2)
         logger.print(f"Amethyst mean is {mean} | std is {std}")
 
