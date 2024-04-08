@@ -95,7 +95,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20}
-    MAX_HISTORY_LENGTH = 30000
+    MAX_HISTORY_LENGTH = 30100
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -114,7 +114,7 @@ class Trader:
             count += 1
 
         return total / count
-    
+
     # exponential moving average
     def ema(self, price_history, history_length, curr_timestamp):
         total = 0
@@ -137,7 +137,8 @@ class Trader:
 
         return total
 
-    def volatility(self, price_history, history_length, curr_timestamp, mean, pad_beginning=False, initial_sqr_residual=0.0):
+    def volatility(self, price_history, history_length, curr_timestamp, mean, pad_beginning=False,
+                   initial_sqr_residual=0.0):
         total = 0
         count = 0
 
@@ -157,7 +158,9 @@ class Trader:
     def lin_regression(self, price_history, history_length, curr_timestamp, pad_beginning=False):
         considered_trades = []
         if pad_beginning and price_history[0]["timestamp"] > curr_timestamp - history_length:
-            considered_trades.extend([(i, price_history[0]["price"]) for i in range(curr_timestamp - history_length, price_history[0]["timestamp"], self.TIMESTAMP_INTERVAL)])
+            considered_trades.extend([(i, price_history[0]["price"]) for i in
+                                      range(curr_timestamp - history_length, price_history[0]["timestamp"],
+                                            self.TIMESTAMP_INTERVAL)])
 
         for trade in price_history:
             if trade["timestamp"] < curr_timestamp - history_length:
@@ -222,9 +225,13 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) == 0:
             return orders
 
-        mean = self.sma(all_trade_history["STARFRUIT"], 6000, state.timestamp, False, 5001)
-        std = self.volatility(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean, True, 3.5)
+        mean = self.sma(all_trade_history["STARFRUIT"], 6000, state.timestamp)
+        std = self.volatility(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean)
         logger.print(f"Starfruit mean is {mean} | std is {std}")
+
+        sma300 = self.sma(all_trade_history["STARFRUIT"], 30000, state.timestamp)
+        sma30 = self.sma(all_trade_history["STARFRUIT"], 1400, state.timestamp)
+        logger.print(f"sma300 {sma300} | sma30 {sma30}")
 
         m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
         logger.print(f"Starfruit slope is {m}")
@@ -240,24 +247,24 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and int(ask) < predicted_price - std * 0.2:
+                if ask_limit > 0 and sma300 < sma30 - std and int(ask) < min(sma30, predicted_price):
                     logger.print(f"STARFRUIT BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
                 elif ask_limit > 0:
-                    orders.append(Order("STARFRUIT", math.floor(predicted_price - std), ask_limit))
+                    orders.append(Order("STARFRUIT", math.floor(min(sma30, predicted_price)), ask_limit))
                     break
 
         if len(order_depth.buy_orders) != 0:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and int(bid) > predicted_price + std * 0.2:
+                if bid_limit > 0 and sma300 >= sma300 + std and int(bid) > max(sma30, predicted_price):
                     logger.print(f"STARFRUIT SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
                 elif bid_limit > 0:
-                    orders.append(Order("STARFRUIT", math.ceil(predicted_price + std), -bid_limit))
+                    orders.append(Order("STARFRUIT", math.ceil(max(sma30, predicted_price)), -bid_limit))
                     break
 
         return orders
