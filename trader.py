@@ -98,7 +98,7 @@ class Trader:
     MAX_HISTORY_LENGTH = 30000
     TIMESTAMP_INTERVAL = 100
 
-    def moving_average(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
+    def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
         total = 0
         count = 0
 
@@ -114,6 +114,28 @@ class Trader:
             count += 1
 
         return total / count
+    
+    # exponential moving average
+    def ema(self, price_history, history_length, curr_timestamp):
+        total = 0
+        count = 0
+
+        if len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
+            padding_count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
+            for i in range(int(padding_count)):
+                count += 1
+                k = 2 / (count / self.TIMESTAMP_INTERVAL + 1)
+                total = price_history[0]["price"] * k + total * (1 - k)
+
+        for trade in price_history:
+            if trade["timestamp"] < curr_timestamp - history_length:
+                continue
+
+            count += 1
+            k = 2 / (count / self.TIMESTAMP_INTERVAL + 1)
+            total = trade["price"] * k + total * (1 - k)
+
+        return total
 
     def volatility(self, price_history, history_length, curr_timestamp, mean, pad_beginning=False, initial_sqr_residual=0.0):
         total = 0
@@ -157,7 +179,7 @@ class Trader:
         if "AMETHYSTS" not in price_history or len(price_history["AMETHYSTS"]) == 0:
             return orders
 
-        mean = self.moving_average(price_history["AMETHYSTS"], 10000, state.timestamp, True, 10000)
+        mean = self.sma(price_history["AMETHYSTS"], 10000, state.timestamp, True, 10000)
         std = self.volatility(price_history["AMETHYSTS"], 8000, state.timestamp, mean, True, 1.2)
         logger.print(f"Amethyst mean is {mean} | std is {std}")
 
@@ -200,7 +222,7 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) == 0:
             return orders
 
-        mean = self.moving_average(all_trade_history["STARFRUIT"], 6000, state.timestamp, False, 5001)
+        mean = self.sma(all_trade_history["STARFRUIT"], 6000, state.timestamp, False, 5001)
         std = self.volatility(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean, True, 3.5)
         logger.print(f"Starfruit mean is {mean} | std is {std}")
 
