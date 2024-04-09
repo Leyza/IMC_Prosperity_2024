@@ -95,7 +95,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20}
-    MAX_HISTORY_LENGTH = 30100
+    MAX_HISTORY_LENGTH = 110
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -231,11 +231,9 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) <= 2:
             return orders
 
-        mac = self.macd(all_trade_history["STARFRUIT"], 2000, 20000, state.timestamp)
-        logger.print(f"Starfruit macd is {mac}")
-
         m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
-        logger.print(f"Starfruit slope is {m}")
+        m1, b1 = self.lin_regression(all_trade_history["SMOOTHED_STARFRUIT"], 2000, state.timestamp)
+        logger.print(f"Starfruit slope is {m} | smoothed slope is {m1}")
 
         predicted_price = m * (state.timestamp + self.TIMESTAMP_INTERVAL) + b
         logger.print(f"Starfruit predicted price is {predicted_price}")
@@ -248,30 +246,30 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and mac >= 1 and m > 0 and int(ask) < predicted_price - 1:
+                if ask_limit > 0 and m1 > 0 and int(ask) < predicted_price:
                     logger.print(f"STARFRUIT BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
             if ask_limit > 0:
-                orders.append(Order("STARFRUIT", math.floor(predicted_price - 2), ask_limit))
+                orders.append(Order("STARFRUIT", math.floor(predicted_price - 1), ask_limit))
 
         if len(order_depth.buy_orders) != 0:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and mac <= -1 and m < 0 and int(bid) > predicted_price + 1:
+                if bid_limit > 0 and m1 < 0 and int(bid) > predicted_price:
                     logger.print(f"STARFRUIT SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
             if bid_limit > 0:
-                orders.append(Order("STARFRUIT", math.ceil(predicted_price + 2), -bid_limit))
+                orders.append(Order("STARFRUIT", math.ceil(predicted_price + 1), -bid_limit))
 
         return orders
 
     def run(self, state: TradingState):
 
         if state.traderData == "":
-            price_history = {"AMETHYSTS": [], "STARFRUIT": []}
+            price_history = {"AMETHYSTS": [], "STARFRUIT": [], "SMOOTHED_STARFRUIT": []}
         else:
             price_history = json.loads(state.traderData)
 
@@ -296,15 +294,24 @@ class Trader:
                     "price": mid_price,
                 })
 
-            # remove oldest price history
-            if len(price_history[product]) > 0:
-                earliest_trade = price_history[product][0]
-                while earliest_trade["timestamp"] < state.timestamp - self.MAX_HISTORY_LENGTH:
-                    price_history[product].pop(0)
+            # add starfruit smoothed price history
+            if product == "STARFRUIT":
+                if "SMOOTHED_STARFRUIT" not in price_history:
+                    price_history["SMOOTHED_STARFRUIT"] = []
 
-                    if len(price_history[product]) == 0:
-                        break
-                    earliest_trade = price_history[product][0]
+                avg_price = self.sma(price_history[product], 1000, state.timestamp)
+                price_history["SMOOTHED_STARFRUIT"].append({
+                    "timestamp": state.timestamp,
+                    "price": avg_price,
+                })
+
+                # remove the oldest price history
+                while len(price_history["SMOOTHED_STARFRUIT"]) > self.MAX_HISTORY_LENGTH:
+                    price_history["SMOOTHED_STARFRUIT"].pop(0)
+
+            # remove the oldest price history
+            while len(price_history[product]) > self.MAX_HISTORY_LENGTH:
+                price_history[product].pop(0)
 
         # calculate orders for each product
         orders = {}
