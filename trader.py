@@ -176,6 +176,12 @@ class Trader:
 
         return m, b  # slope, intercept
 
+    def macd(self, price_history, short_history, long_history, curr_timestamp):
+        short_sma = self.sma(price_history, short_history, curr_timestamp)
+        long_sma = self.sma(price_history, long_history, curr_timestamp)
+
+        return short_sma - long_sma
+
     def amethyst_algo(self, state, order_depth, price_history):
         orders: List[Order] = []
 
@@ -222,16 +228,11 @@ class Trader:
     def starfruit_algo(self, state, order_depth, all_trade_history):
         orders: List[Order] = []
 
-        if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) == 0:
+        if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) <= 2:
             return orders
 
-        mean = self.sma(all_trade_history["STARFRUIT"], 6000, state.timestamp)
-        std = self.volatility(all_trade_history["STARFRUIT"], 6000, state.timestamp, mean)
-        logger.print(f"Starfruit mean is {mean} | std is {std}")
-
-        sma300 = self.sma(all_trade_history["STARFRUIT"], 30000, state.timestamp)
-        sma30 = self.sma(all_trade_history["STARFRUIT"], 1400, state.timestamp)
-        logger.print(f"sma300 {sma300} | sma30 {sma30}")
+        mac = self.macd(all_trade_history["STARFRUIT"], 3000, 30000, state.timestamp)
+        logger.print(f"Starfruit macd is {mac}")
 
         m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
         logger.print(f"Starfruit slope is {m}")
@@ -247,24 +248,24 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and sma300 < sma30 - std and int(ask) < min(sma30, predicted_price):
+                if ask_limit > 0 and mac >= 1 and int(ask) < predicted_price - 1:
                     logger.print(f"STARFRUIT BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
                 elif ask_limit > 0:
-                    orders.append(Order("STARFRUIT", math.floor(min(sma30, predicted_price)), ask_limit))
+                    orders.append(Order("STARFRUIT", math.floor(predicted_price - 2), ask_limit))
                     break
 
         if len(order_depth.buy_orders) != 0:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and sma300 >= sma300 + std and int(bid) > max(sma30, predicted_price):
+                if bid_limit > 0 and mac <= -1 and int(bid) > predicted_price + 1:
                     logger.print(f"STARFRUIT SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
                 elif bid_limit > 0:
-                    orders.append(Order("STARFRUIT", math.ceil(max(sma30, predicted_price)), -bid_limit))
+                    orders.append(Order("STARFRUIT", math.ceil(predicted_price + 2), -bid_limit))
                     break
 
         return orders
