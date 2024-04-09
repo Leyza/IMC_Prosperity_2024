@@ -231,8 +231,8 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) <= 2:
             return orders
 
-        m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
-        m1, b1 = self.lin_regression(all_trade_history["SMOOTHED_STARFRUIT"], 2000, state.timestamp)
+        m, b = self.lin_regression(all_trade_history["STARFRUIT"], 1500, state.timestamp)
+        m1, b1 = self.lin_regression(all_trade_history["SMOOTHED_STARFRUIT"], 2500, state.timestamp)
         logger.print(f"Starfruit slope is {m} | smoothed slope is {m1}")
 
         predicted_price = m * (state.timestamp + self.TIMESTAMP_INTERVAL) + b
@@ -251,7 +251,7 @@ class Trader:
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
             if ask_limit > 0:
-                orders.append(Order("STARFRUIT", math.floor(predicted_price - 1), ask_limit))
+                orders.append(Order("STARFRUIT", math.floor(predicted_price - 0.5), ask_limit))
 
         if len(order_depth.buy_orders) != 0:
             for bid, amt in list(order_depth.buy_orders.items()):
@@ -262,7 +262,7 @@ class Trader:
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
             if bid_limit > 0:
-                orders.append(Order("STARFRUIT", math.ceil(predicted_price + 1), -bid_limit))
+                orders.append(Order("STARFRUIT", math.ceil(predicted_price + 0.5), -bid_limit))
 
         return orders
 
@@ -299,7 +299,7 @@ class Trader:
                 if "SMOOTHED_STARFRUIT" not in price_history:
                     price_history["SMOOTHED_STARFRUIT"] = []
 
-                avg_price = self.sma(price_history[product], 1000, state.timestamp)
+                avg_price = self.sma(price_history[product], 2000, state.timestamp)
                 price_history["SMOOTHED_STARFRUIT"].append({
                     "timestamp": state.timestamp,
                     "price": avg_price,
