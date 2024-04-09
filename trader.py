@@ -232,7 +232,7 @@ class Trader:
             return orders
 
         m, b = self.lin_regression(all_trade_history["SMOOTHED_STARFRUIT"], 500, state.timestamp)
-        m1, b1 = self.lin_regression(all_trade_history["SMOOTHED_STARFRUIT"], 2000, state.timestamp)
+        m1, b1 = self.lin_regression(all_trade_history["SMOOTHED_STARFRUIT"], 800, state.timestamp)
         logger.print(f"Starfruit slope is {m} | smoothed slope is {m1}")
 
         predicted_price = m * (state.timestamp + self.TIMESTAMP_INTERVAL) + b
