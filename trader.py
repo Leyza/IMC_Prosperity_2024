@@ -231,7 +231,7 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) <= 2:
             return orders
 
-        mac = self.macd(all_trade_history["STARFRUIT"], 3000, 30000, state.timestamp)
+        mac = self.macd(all_trade_history["STARFRUIT"], 2000, 20000, state.timestamp)
         logger.print(f"Starfruit macd is {mac}")
 
         m, b = self.lin_regression(all_trade_history["STARFRUIT"], 8000, state.timestamp)
@@ -248,25 +248,23 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and mac >= 1 and int(ask) < predicted_price - 1:
+                if ask_limit > 0 and mac >= 1 and m > 0 and int(ask) < predicted_price - 1:
                     logger.print(f"STARFRUIT BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
-                elif ask_limit > 0:
-                    orders.append(Order("STARFRUIT", math.floor(predicted_price - 2), ask_limit))
-                    break
+            if ask_limit > 0:
+                orders.append(Order("STARFRUIT", math.floor(predicted_price - 2), ask_limit))
 
         if len(order_depth.buy_orders) != 0:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and mac <= -1 and int(bid) > predicted_price + 1:
+                if bid_limit > 0 and mac <= -1 and m < 0 and int(bid) > predicted_price + 1:
                     logger.print(f"STARFRUIT SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
-                elif bid_limit > 0:
-                    orders.append(Order("STARFRUIT", math.ceil(predicted_price + 2), -bid_limit))
-                    break
+            if bid_limit > 0:
+                orders.append(Order("STARFRUIT", math.ceil(predicted_price + 2), -bid_limit))
 
         return orders
 
