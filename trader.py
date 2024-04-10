@@ -222,10 +222,12 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and (int(ask) <= buy_price or (curr_pos < 0 and int(ask) == buy_price + 1)):
-                    logger.print(f"AMETHYST BUY {str(min(ask_amt, ask_limit))}x, {ask}")
+                if ask_limit > 0 and int(ask) <= buy_price:
                     orders.append(Order("AMETHYSTS", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
+                elif ask_limit > 0 and curr_pos < 0 and int(ask) == buy_price + 1:
+                    orders.append(Order("AMETHYSTS", ask, min(ask_amt, min(ask_limit, abs(curr_pos)))))
+                    ask_limit -= min(ask_amt, min(ask_limit, abs(curr_pos)))
 
             # market make
             if ask_limit > 0:
@@ -240,10 +242,12 @@ class Trader:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and (int(bid) >= sell_price or (curr_pos > 0 and int(bid) == sell_price - 1)):
-                    logger.print(f"AMETHYST SELL {str(min(bid_amt, bid_limit))}x, {bid}")
+                if bid_limit > 0 and int(bid) >= sell_price:
                     orders.append(Order("AMETHYSTS", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
+                elif bid_limit > 0 and curr_pos > 0 and int(bid) == sell_price - 1:
+                    orders.append(Order("AMETHYSTS", bid, -min(bid_amt, min(bid_limit, abs(curr_pos)))))
+                    bid_limit -= min(bid_amt, min(bid_limit, abs(curr_pos)))
 
             # market make
             if bid_limit > 0:
