@@ -192,27 +192,38 @@ class Trader:
         ask_limit = self.POSITION_LIMITS["AMETHYSTS"] - curr_pos
         bid_limit = self.POSITION_LIMITS["AMETHYSTS"] + curr_pos
 
+        highest_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
+        lowest_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
+
         if len(order_depth.sell_orders) != 0:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and int(ask) <= buy_price:
+                if ask_limit > 0 and (int(ask) <= buy_price or (curr_pos < 0 and int(ask) == buy_price + 1)):
                     logger.print(f"AMETHYST BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("AMETHYSTS", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
+
             if ask_limit > 0:
-                orders.append(Order("AMETHYSTS", math.floor(buy_price - 1), ask_limit))
+                if curr_pos > 0:
+                    orders.append(Order("AMETHYSTS", min(buy_price, lowest_bid + 1), ask_limit))
+                else:
+                    orders.append(Order("AMETHYSTS", min(buy_price + 1, lowest_bid + 2), ask_limit))
 
         if len(order_depth.buy_orders) != 0:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and int(bid) >= sell_price:
+                if bid_limit > 0 and (int(bid) >= sell_price or (curr_pos > 0 and int(bid) == sell_price - 1)):
                     logger.print(f"AMETHYST SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("AMETHYSTS", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
+
             if bid_limit > 0:
-                orders.append(Order("AMETHYSTS", math.ceil(sell_price + 1), -bid_limit))
+                if curr_pos < 0:
+                    orders.append(Order("AMETHYSTS", max(sell_price, highest_ask - 1), -bid_limit))
+                else:
+                    orders.append(Order("AMETHYSTS", max(sell_price - 1, highest_ask - 2), -bid_limit))
 
         return orders
 
@@ -235,8 +246,8 @@ class Trader:
         ask_limit = self.POSITION_LIMITS["STARFRUIT"] - curr_pos
         bid_limit = self.POSITION_LIMITS["STARFRUIT"] + curr_pos
 
-        best_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
-        best_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
+        highest_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
+        lowest_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
 
         # buying logic
         if len(order_depth.sell_orders) != 0:
@@ -249,7 +260,7 @@ class Trader:
                     ask_limit -= min(ask_amt, ask_limit)
 
             if ask_limit > 0:
-                orders.append(Order("STARFRUIT", min(predicted_price - 1, best_bid + 1), ask_limit))
+                orders.append(Order("STARFRUIT", min(predicted_price - 1, lowest_bid + 1), ask_limit))
 
         # selling logic
         if len(order_depth.buy_orders) != 0:
@@ -262,7 +273,7 @@ class Trader:
                     bid_limit -= min(bid_amt, bid_limit)
 
             if bid_limit > 0:
-                orders.append(Order("STARFRUIT", max(predicted_price + 1, best_ask - 1), -bid_limit))
+                orders.append(Order("STARFRUIT", max(predicted_price + 1, highest_ask - 1), -bid_limit))
 
         return orders
 
