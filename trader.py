@@ -99,6 +99,9 @@ class Trader:
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
+        """
+        Calculate the simple moving average on the price history.
+        """
         total = 0
         count = 0
 
@@ -115,8 +118,10 @@ class Trader:
 
         return total / count
     
-    # exponential moving average
     def ema(self, price_history, history_length, curr_timestamp):
+        """
+        Calculate the exponential moving average on the price history.
+        """
         total = 0
         count = 0
 
@@ -138,6 +143,9 @@ class Trader:
         return total
 
     def volatility(self, price_history, history_length, curr_timestamp, mean, pad_beginning=False, initial_sqr_residual=0.0):
+        """
+        Calculate the historical price volatility.
+        """
         total = 0
         count = 0
 
@@ -155,10 +163,16 @@ class Trader:
         return np.sqrt(total / count)
 
     def lin_regression(self, train_x, train_y):
+        """
+        Apply linear regression to the given training data set. Return the coefficients and intercept.
+        """
         res = np.linalg.lstsq(train_x, train_y, rcond=None)[0]
         return res[:-1], res[-1]        # coefs, intercept
 
     def preprocess_for_lr(self, price_history, num_vars):
+        """
+        Preprocess price history into the training data matrix and training targets. Num_vars determines the number of features.
+        """
         result = {f"x{i}": [] for i in range(num_vars)}
         result['target'] = []
 
@@ -178,6 +192,9 @@ class Trader:
         return train_x, train_y      # training set, training targets
 
     def predict_from_coefs(self, price_history, coef, intercept):
+        """
+        Predict next price by applying coefficients and intercept to price history.
+        """
         if len(price_history) < len(coef):
             return -1
 
@@ -199,7 +216,9 @@ class Trader:
         highest_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
         lowest_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
 
+        # buying logic
         if len(order_depth.sell_orders) != 0:
+            # market take
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
@@ -208,13 +227,16 @@ class Trader:
                     orders.append(Order("AMETHYSTS", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
 
+            # market make
             if ask_limit > 0:
                 if curr_pos > 0:
                     orders.append(Order("AMETHYSTS", min(buy_price, lowest_bid + 1), ask_limit))
                 else:
                     orders.append(Order("AMETHYSTS", min(buy_price + 1, lowest_bid + 2), ask_limit))
 
+        # selling logic
         if len(order_depth.buy_orders) != 0:
+            # market take
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
@@ -223,6 +245,7 @@ class Trader:
                     orders.append(Order("AMETHYSTS", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
 
+            # market make
             if bid_limit > 0:
                 if curr_pos < 0:
                     orders.append(Order("AMETHYSTS", max(sell_price, highest_ask - 1), -bid_limit))
@@ -234,14 +257,15 @@ class Trader:
     def starfruit_algo(self, state, order_depth, all_trade_history):
         orders: List[Order] = []
 
-        # Values to tune
+        # Values affecting linear regression to tune
         num_vars = 5
-        default_coef = [0.19213413, 0.19565408, 0.26269948, 0.34608027]
-        default_intercept = 17.363839324130822
+        default_coef = [0.46853456, 0.52587771]
+        default_intercept = 28.267696227103443
 
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(default_coef):
             return orders
 
+        # linear regression to predict next price
         if len(all_trade_history["STARFRUIT"]) >= num_vars * 2:
             train_x, train_y = self.preprocess_for_lr(all_trade_history["STARFRUIT"], num_vars)
             coefs, intercept = self.lin_regression(train_x, train_y)
@@ -262,6 +286,7 @@ class Trader:
 
         # buying logic
         if len(order_depth.sell_orders) != 0:
+            # market take
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
@@ -270,11 +295,13 @@ class Trader:
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
 
+            # market make
             if ask_limit > 0:
-                orders.append(Order("STARFRUIT", min(predicted_price - 1, lowest_bid + 1), ask_limit))
+                orders.append(Order("STARFRUIT", min(buy_price, lowest_bid + 1), ask_limit))
 
         # selling logic
         if len(order_depth.buy_orders) != 0:
+            # market take
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
@@ -283,8 +310,9 @@ class Trader:
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
 
+            # market make
             if bid_limit > 0:
-                orders.append(Order("STARFRUIT", max(predicted_price + 1, highest_ask - 1), -bid_limit))
+                orders.append(Order("STARFRUIT", max(sell_price, highest_ask - 1), -bid_limit))
 
         return orders
 
