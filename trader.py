@@ -231,8 +231,8 @@ class Trader:
         orders: List[Order] = []
 
         # Values to tune
-        coef = [-0.01869561, 0.0455032, 0.16316049, 0.8090892]
-        intercept = 4.481696494462085
+        coef = [0.19213413, 0.19565408, 0.26269948, 0.34608027]
+        intercept = 17.363839324130822
 
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(coef):
             return orders
@@ -293,12 +293,12 @@ class Trader:
 
             if len(order_depth.buy_orders) > 0 or len(order_depth.sell_orders) > 0:
                 if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
-                    mid_price = np.average([int(list(order_depth.buy_orders.items())[-1][0]),
-                                            int(list(order_depth.sell_orders.items())[-1][0])])
+                    mid_price = np.average([int(list(order_depth.buy_orders.items())[0][0]),
+                                            int(list(order_depth.sell_orders.items())[0][0])])
                 elif len(order_depth.buy_orders) > 0:
-                    mid_price = list(order_depth.buy_orders.items())[-1]
+                    mid_price = list(order_depth.buy_orders.items())[0]
                 else:
-                    mid_price = list(order_depth.sell_orders.items())[-1]
+                    mid_price = list(order_depth.sell_orders.items())[0]
 
                 price_history[product].append({
                     "timestamp": state.timestamp,
