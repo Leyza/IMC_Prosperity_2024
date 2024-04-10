@@ -174,9 +174,12 @@ class Trader:
         return m, b  # slope, intercept
 
     def predict_from_coefs(self, price_history, coef, intercept):
+        if len(price_history) < len(coef):
+            return -1
+
         pred = intercept
-        for i in range(min(len(price_history), len(coef))):
-            pred += price_history[-i - 1]["price"] * coef[-i - 1]
+        for i, x in enumerate(price_history[-len(coef):]):
+            pred += x["price"] * coef[i]
         return pred
 
     def amethyst_algo(self, state, order_depth):
@@ -197,9 +200,8 @@ class Trader:
                     logger.print(f"AMETHYST BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("AMETHYSTS", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
-                elif ask_limit > 0:
-                    orders.append(Order("AMETHYSTS", math.floor(buy_price - 2), ask_limit))
-                    break
+            if ask_limit > 0:
+                orders.append(Order("AMETHYSTS", math.floor(buy_price - 1), ask_limit))
 
         if len(order_depth.buy_orders) != 0:
             for bid, amt in list(order_depth.buy_orders.items()):
@@ -209,9 +211,8 @@ class Trader:
                     logger.print(f"AMETHYST SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("AMETHYSTS", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
-                elif bid_limit > 0:
-                    orders.append(Order("AMETHYSTS", math.ceil(sell_price + 2), -bid_limit))
-                    break
+            if bid_limit > 0:
+                orders.append(Order("AMETHYSTS", math.ceil(sell_price + 1), -bid_limit))
 
         return orders
 
@@ -219,48 +220,49 @@ class Trader:
         orders: List[Order] = []
 
         # Values to tune
-        coef = [0.192134, 0.195654, 0.262699, 0.346080]
-        intercept = 17.363839324130822
+        coef = [-0.01869561, 0.0455032, 0.16316049, 0.8090892]
+        intercept = 4.481696494462085
 
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(coef):
             return orders
 
         predicted_price = int(round(self.predict_from_coefs(all_trade_history["STARFRUIT"], coef, intercept)))
-        logger.print(f"Starfruit predicted price is {predicted_price}")
+        buy_price = predicted_price - 1
+        sell_price = predicted_price + 1
+        logger.print(f"Starfruit predicted price is {predicted_price} | buy price is {buy_price} | sell price is {sell_price}")
 
         curr_pos = state.position["STARFRUIT"] if "STARFRUIT" in state.position else 0
         ask_limit = self.POSITION_LIMITS["STARFRUIT"] - curr_pos
         bid_limit = self.POSITION_LIMITS["STARFRUIT"] + curr_pos
 
+        best_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
+        best_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
+
         # buying logic
         if len(order_depth.sell_orders) != 0:
-            best_ask, _ = list(order_depth.sell_orders.items())[0]
-
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and (int(ask) <= predicted_price - 1 or (curr_pos < 0 and int(ask) == predicted_price)):
+                if ask_limit > 0 and (int(ask) <= buy_price or (curr_pos < 0 and int(ask) == predicted_price)):
                     logger.print(f"STARFRUIT BUY {str(min(ask_amt, ask_limit))}x, {ask}")
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
 
             if ask_limit > 0:
-                orders.append(Order("STARFRUIT", min(predicted_price - 1, best_ask + 1), ask_limit))
+                orders.append(Order("STARFRUIT", min(predicted_price - 1, best_bid + 1), ask_limit))
 
         # selling logic
         if len(order_depth.buy_orders) != 0:
-            best_bid, _ = list(order_depth.buy_orders.items())[0]
-
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and (int(bid) >= predicted_price + 1 or (curr_pos > 0 and int(bid) == predicted_price)):
+                if bid_limit > 0 and (int(bid) >= sell_price or (curr_pos > 0 and int(bid) == predicted_price)):
                     logger.print(f"STARFRUIT SELL {str(min(bid_amt, bid_limit))}x, {bid}")
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
 
             if bid_limit > 0:
-                orders.append(Order("STARFRUIT", max(predicted_price + 1, best_bid - 1), -bid_limit))
+                orders.append(Order("STARFRUIT", max(predicted_price + 1, best_ask - 1), -bid_limit))
 
         return orders
 
@@ -280,12 +282,12 @@ class Trader:
 
             if len(order_depth.buy_orders) > 0 or len(order_depth.sell_orders) > 0:
                 if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
-                    mid_price = np.average([int(list(order_depth.buy_orders.items())[0][0]),
-                                            int(list(order_depth.sell_orders.items())[0][0])])
+                    mid_price = np.average([int(list(order_depth.buy_orders.items())[-1][0]),
+                                            int(list(order_depth.sell_orders.items())[-1][0])])
                 elif len(order_depth.buy_orders) > 0:
-                    mid_price = list(order_depth.buy_orders.items())[0]
+                    mid_price = list(order_depth.buy_orders.items())[-1]
                 else:
-                    mid_price = list(order_depth.sell_orders.items())[0]
+                    mid_price = list(order_depth.sell_orders.items())[-1]
 
                 price_history[product].append({
                     "timestamp": state.timestamp,
