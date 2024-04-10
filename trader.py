@@ -95,7 +95,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 100}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -235,7 +235,7 @@ class Trader:
         orders: List[Order] = []
 
         # Values to tune
-        num_vars = 4
+        num_vars = 5
         default_coef = [0.19213413, 0.19565408, 0.26269948, 0.34608027]
         default_intercept = 17.363839324130822
 
@@ -304,12 +304,12 @@ class Trader:
 
             if len(order_depth.buy_orders) > 0 or len(order_depth.sell_orders) > 0:
                 if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
-                    mid_price = np.average([int(list(order_depth.buy_orders.items())[0][0]),
-                                            int(list(order_depth.sell_orders.items())[0][0])])
+                    mid_price = np.average([int(list(order_depth.buy_orders.items())[-1][0]),
+                                            int(list(order_depth.sell_orders.items())[-1][0])])
                 elif len(order_depth.buy_orders) > 0:
-                    mid_price = list(order_depth.buy_orders.items())[0]
+                    mid_price = list(order_depth.buy_orders.items())[-1]
                 else:
-                    mid_price = list(order_depth.sell_orders.items())[0]
+                    mid_price = list(order_depth.sell_orders.items())[-1]
 
                 price_history[product].append({
                     "timestamp": state.timestamp,
