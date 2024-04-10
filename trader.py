@@ -95,7 +95,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 20}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 100}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -154,24 +154,28 @@ class Trader:
 
         return np.sqrt(total / count)
 
-    def lin_regression(self, price_history, history_length, curr_timestamp, pad_beginning=False):
-        considered_trades = []
-        if pad_beginning and price_history[0]["timestamp"] > curr_timestamp - history_length:
-            considered_trades.extend([(i, price_history[0]["price"]) for i in range(curr_timestamp - history_length, price_history[0]["timestamp"], self.TIMESTAMP_INTERVAL)])
+    def lin_regression(self, train_x, train_y):
+        res = np.linalg.lstsq(train_x, train_y, rcond=None)[0]
+        return res[:-1], res[-1]        # coefs, intercept
 
-        for trade in price_history:
-            if trade["timestamp"] < curr_timestamp - history_length:
-                continue
+    def preprocess_for_lr(self, price_history, num_vars):
+        result = {f"x{i}": [] for i in range(num_vars)}
+        result['target'] = []
 
-            considered_trades.append((trade["timestamp"], trade["price"]))
+        past_vals = []
+        for i in range(len(price_history)):
+            past_vals.append(price_history[i]['price'])
 
-        x = [k for (k, v) in considered_trades]
-        y = [v for (k, v) in considered_trades]
-        A = np.vstack([x, np.ones(len(x))]).T
+            if i >= num_vars:
+                for j in range(num_vars):
+                    result[f"x{j}"].append(past_vals[j])
+                result['target'].append(past_vals[-1])
+                past_vals.pop(0)
 
-        m, b = np.linalg.lstsq(A, y, rcond=None)[0]
-
-        return m, b  # slope, intercept
+        train_x = np.dstack([[result[f"x{i}"]] for i in range(num_vars)]).squeeze()
+        train_x = np.c_[train_x, np.ones(train_x.shape[0])]
+        train_y = np.array(result['target'])
+        return train_x, train_y      # training set, training targets
 
     def predict_from_coefs(self, price_history, coef, intercept):
         if len(price_history) < len(coef):
@@ -231,13 +235,20 @@ class Trader:
         orders: List[Order] = []
 
         # Values to tune
-        coef = [0.19213413, 0.19565408, 0.26269948, 0.34608027]
-        intercept = 17.363839324130822
+        num_vars = 4
+        default_coef = [0.19213413, 0.19565408, 0.26269948, 0.34608027]
+        default_intercept = 17.363839324130822
 
-        if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(coef):
+        if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(default_coef):
             return orders
 
-        predicted_price = int(round(self.predict_from_coefs(all_trade_history["STARFRUIT"], coef, intercept)))
+        if len(all_trade_history["STARFRUIT"]) >= 2 * (num_vars + 1):
+            train_x, train_y = self.preprocess_for_lr(all_trade_history["STARFRUIT"], num_vars)
+            coefs, intercept = self.lin_regression(train_x, train_y)
+            predicted_price = int(round(self.predict_from_coefs(all_trade_history["STARFRUIT"], coefs, intercept)))
+        else:
+            predicted_price = int(round(self.predict_from_coefs(all_trade_history["STARFRUIT"], default_coef, default_intercept)))
+
         buy_price = predicted_price - 1
         sell_price = predicted_price + 1
         logger.print(f"Starfruit predicted price is {predicted_price} | buy price is {buy_price} | sell price is {sell_price}")
