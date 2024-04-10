@@ -242,7 +242,7 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(default_coef):
             return orders
 
-        if len(all_trade_history["STARFRUIT"]) >= 2 * (num_vars + 1):
+        if len(all_trade_history["STARFRUIT"]) >= num_vars * 2:
             train_x, train_y = self.preprocess_for_lr(all_trade_history["STARFRUIT"], num_vars)
             coefs, intercept = self.lin_regression(train_x, train_y)
             predicted_price = int(round(self.predict_from_coefs(all_trade_history["STARFRUIT"], coefs, intercept)))
@@ -302,14 +302,16 @@ class Trader:
             if product not in price_history:
                 price_history[product] = []
 
+            med_bid = np.median([p for p, v in list(order_depth.buy_orders.items()) for _ in range(abs(v))])
+            med_ask = np.median([p for p, v in list(order_depth.sell_orders.items()) for _ in range(abs(v))])
+
             if len(order_depth.buy_orders) > 0 or len(order_depth.sell_orders) > 0:
                 if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
-                    mid_price = np.average([int(list(order_depth.buy_orders.items())[-1][0]),
-                                            int(list(order_depth.sell_orders.items())[-1][0])])
+                    mid_price = (med_bid + med_ask) / 2
                 elif len(order_depth.buy_orders) > 0:
-                    mid_price = list(order_depth.buy_orders.items())[-1]
+                    mid_price = med_bid
                 else:
-                    mid_price = list(order_depth.sell_orders.items())[-1]
+                    mid_price = med_ask
 
                 price_history[product].append({
                     "timestamp": state.timestamp,
