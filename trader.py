@@ -263,8 +263,8 @@ class Trader:
 
         # Values affecting linear regression to tune
         num_vars = 5
-        default_coef = [0.46853456, 0.52587771]
-        default_intercept = 28.267696227103443
+        default_coef = [0.21875239, 0.78025873]
+        default_intercept = 5.003692924688039
 
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(default_coef):
             return orders
