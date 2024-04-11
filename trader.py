@@ -172,9 +172,10 @@ class Trader:
         res = np.linalg.lstsq(train_x, train_y, rcond=None)[0]
         return res[:-1], res[-1]        # coefs, intercept
 
-    def preprocess_for_lr(self, price_history, num_vars):
+    def preprocess_for_lr(self, price_history, num_vars, future_step=0):
         """
-        Preprocess price history into the training data matrix and training targets. Num_vars determines the number of features.
+        Preprocess price history into the training data matrix and training targets.
+        Num_vars determines the number of features. Future step determines how many timestamps to skip between last feature and target.
         """
         result = {f"x{i}": [] for i in range(num_vars)}
         result['target'] = []
@@ -183,7 +184,7 @@ class Trader:
         for i in range(len(price_history)):
             past_vals.append(price_history[i]['price'])
 
-            if i >= num_vars:
+            if len(past_vals) > num_vars + future_step:
                 for j in range(num_vars):
                     result[f"x{j}"].append(past_vals[j])
                 result['target'].append(past_vals[-1])
@@ -272,17 +273,26 @@ class Trader:
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(default_coef):
             return orders
 
-        # linear regression to predict next price
-        if len(all_trade_history["STARFRUIT"]) >= num_vars * 2:
+        # linear regression to predict next price(s)
+        if len(all_trade_history["STARFRUIT"]) >= 30:
             train_x, train_y = self.preprocess_for_lr(all_trade_history["STARFRUIT"], num_vars)
             coefs, intercept = self.lin_regression(train_x, train_y)
-            predicted_price = int(round(self.predict_from_coefs(all_trade_history["STARFRUIT"], coefs, intercept)))
+            predicted_price = self.predict_from_coefs(all_trade_history["STARFRUIT"], coefs, intercept)
+
+            train_x1, train_y1 = self.preprocess_for_lr(all_trade_history["STARFRUIT"], num_vars, 3)
+            coefs1, intercept1 = self.lin_regression(train_x1, train_y1)
+            future_predicted_price = self.predict_from_coefs(all_trade_history["STARFRUIT"], coefs1, intercept1)
         else:
-            predicted_price = int(round(self.predict_from_coefs(all_trade_history["STARFRUIT"], default_coef, default_intercept)))
+            predicted_price = self.predict_from_coefs(all_trade_history["STARFRUIT"], default_coef, default_intercept)
+            future_predicted_price = predicted_price
+
+        # predicted_price = math.ceil(predicted_price) if future_predicted_price > predicted_price else math.floor(predicted_price) if future_predicted_price < predicted_price else int(round(predicted_price))
+        predicted_price = int(round(predicted_price))
+        future_predicted_price = int(round(future_predicted_price))
 
         buy_price = predicted_price - 1
         sell_price = predicted_price + 1
-        logger.print(f"Starfruit predicted price is {predicted_price} | buy price is {buy_price} | sell price is {sell_price}")
+        logger.print(f"Starfruit predicted price is {predicted_price} | future price is {future_predicted_price} | buy price is {buy_price} | sell price is {sell_price}")
 
         curr_pos = state.position["STARFRUIT"] if "STARFRUIT" in state.position else 0
         ask_limit = self.POSITION_LIMITS["STARFRUIT"] - curr_pos
@@ -297,15 +307,21 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and int(ask) <= buy_price:
+                if ask_limit > 0 and int(ask) <= buy_price - (1 if future_predicted_price < predicted_price else -1 if future_predicted_price > predicted_price else 0):
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
-                elif ask_limit > 0 and curr_pos < 0 and int(ask) == predicted_price:
+                elif ask_limit > 0 and curr_pos < 0 and int(ask) <= buy_price + 1:
                     orders.append(Order("STARFRUIT", ask, min(ask_amt, min(ask_limit, abs(curr_pos)))))
                     ask_limit -= min(ask_amt, min(ask_limit, abs(curr_pos)))
 
             # market make
             if ask_limit > 0:
+                # if future_predicted_price > predicted_price and curr_pos < 0:
+                #     orders.append(Order("STARFRUIT", min(buy_price, lowest_bid + 2), abs(curr_pos)))
+                #     ask_limit -= abs(curr_pos)
+                # if future_predicted_price < predicted_price and curr_pos > 0:
+                #     orders.append(Order("STARFRUIT", min(buy_price - 1, lowest_bid), ask_limit))
+                # else:
                 orders.append(Order("STARFRUIT", min(buy_price, lowest_bid + 1), ask_limit))
 
         # selling logic
@@ -314,15 +330,21 @@ class Trader:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and int(bid) >= sell_price:
+                if bid_limit > 0 and int(bid) >= sell_price + (1 if future_predicted_price > predicted_price else -1 if future_predicted_price < predicted_price else 0):
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
-                elif bid_limit > 0 and curr_pos > 0 and int(bid) == predicted_price:
+                elif bid_limit > 0 and curr_pos > 0 and int(bid) >= sell_price - 1:
                     orders.append(Order("STARFRUIT", bid, -min(bid_amt, min(bid_limit, abs(curr_pos)))))
                     bid_limit -= min(bid_amt, min(bid_limit, abs(curr_pos)))
 
             # market make
             if bid_limit > 0:
+                # if future_predicted_price < predicted_price and curr_pos > 0:
+                #     orders.append(Order("STARFRUIT", max(sell_price, highest_ask - 2), -abs(curr_pos)))
+                #     bid_limit -= abs(curr_pos)
+                # if future_predicted_price > predicted_price and curr_pos < 0:
+                #     orders.append(Order("STARFRUIT", max(sell_price + 1, highest_ask), -bid_limit))
+                # else:
                 orders.append(Order("STARFRUIT", max(sell_price, highest_ask - 1), -bid_limit))
 
         return orders
