@@ -125,22 +125,25 @@ class Trader:
         total = 0
         count = 0
 
-        if len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
-            padding_count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
-            for i in range(int(padding_count)):
-                count += 1
-                k = 2 / (count / self.TIMESTAMP_INTERVAL + 1)
-                total = price_history[0]["price"] * k + total * (1 - k)
-
         for trade in price_history:
             if trade["timestamp"] < curr_timestamp - history_length:
                 continue
 
             count += 1
-            k = 2 / (count / self.TIMESTAMP_INTERVAL + 1)
+            k = 2 / (count + 1)
             total = trade["price"] * k + total * (1 - k)
 
         return total
+
+    def macd(self, price_history, short_length, long_length, curr_timestamp, sma=True):
+        if sma:
+            short = self.sma(price_history, short_length, curr_timestamp)
+            long = self.sma(price_history, long_length, curr_timestamp)
+        else:
+            short = self.ema(price_history, short_length, curr_timestamp)
+            long = self.ema(price_history, long_length, curr_timestamp)
+
+        return short - long
 
     def volatility(self, price_history, history_length, curr_timestamp, mean, pad_beginning=False, initial_sqr_residual=0.0):
         """
