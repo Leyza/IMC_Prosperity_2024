@@ -237,7 +237,7 @@ class Trader:
                 if curr_pos > 0:
                     orders.append(Order("AMETHYSTS", min(buy_price, lowest_bid + 1), ask_limit))
                 else:
-                    orders.append(Order("AMETHYSTS", min(buy_price + 1, lowest_bid + 2), ask_limit))
+                    orders.append(Order("AMETHYSTS", min(buy_price, lowest_bid + 2), ask_limit))
 
         # selling logic
         if len(order_depth.buy_orders) != 0:
@@ -257,7 +257,7 @@ class Trader:
                 if curr_pos < 0:
                     orders.append(Order("AMETHYSTS", max(sell_price, highest_ask - 1), -bid_limit))
                 else:
-                    orders.append(Order("AMETHYSTS", max(sell_price - 1, highest_ask - 2), -bid_limit))
+                    orders.append(Order("AMETHYSTS", max(sell_price, highest_ask - 2), -bid_limit))
 
         return orders
 
