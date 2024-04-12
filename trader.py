@@ -95,7 +95,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 80}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 200}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -124,6 +124,13 @@ class Trader:
         """
         total = 0
         count = 0
+
+        if len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
+            padding_count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
+            for i in range(int(padding_count)):
+                count += 1
+                k = 2 / (count + 1)
+                total = price_history[0]["price"] * k + total * (1 - k)
 
         for trade in price_history:
             if trade["timestamp"] < curr_timestamp - history_length:
@@ -283,22 +290,16 @@ class Trader:
         else:
             predicted_price = self.predict_from_coefs(all_trade_history["STARFRUIT"], default_coef, default_intercept)
 
-        if len(all_trade_history["STARFRUIT"]) >= (num_vars_future + future_steps) + 3:
-            train_x1, train_y1 = self.preprocess_for_lr(all_trade_history["STARFRUIT"], num_vars_future, 30, future_steps)
-            coefs1, intercept1 = self.lin_regression(train_x1, train_y1)
-            future_predicted_price = self.predict_from_coefs(all_trade_history["STARFRUIT"], coefs1, intercept1)
-        else:
-            future_predicted_price = predicted_price
+        macd = self.macd(all_trade_history["STARFRUIT"], 8000, 20000, state.timestamp, False)
 
-        is_uptrend = future_predicted_price > predicted_price + 0.5
-        is_downtrend = future_predicted_price < predicted_price - 0.5
+        is_uptrend = macd > 1
+        is_downtrend = macd < -1
 
         predicted_price = int(round(predicted_price))
-        future_predicted_price = int(round(future_predicted_price))
 
         buy_price = predicted_price - 1
         sell_price = predicted_price + 1
-        logger.print(f"Starfruit predicted price is {predicted_price} | future price is {future_predicted_price} | "
+        logger.print(f"Starfruit predicted price is {predicted_price} | macd is is {macd} | "
                      f"trend is {'up' if is_uptrend else 'down' if is_downtrend else 'neutral'} | buy price is {buy_price} | sell price is {sell_price}")
 
         curr_pos = state.position["STARFRUIT"] if "STARFRUIT" in state.position else 0
@@ -323,14 +324,12 @@ class Trader:
 
             # market make
             if ask_limit > 0:
-                # if is_uptrend and curr_pos < 0:
-                #     orders.append(Order("STARFRUIT", min(buy_price + 1, lowest_bid + 2), ask_limit))
-                # elif is_uptrend and curr_pos < -8:
-                #     orders.append(Order("STARFRUIT", min(buy_price + 2, lowest_bid + 3), ask_limit))
-                # elif is_downtrend and curr_pos > 0:
-                #     orders.append(Order("STARFRUIT", min(buy_price - 1, lowest_bid + 1), ask_limit))
-                # else:
-                orders.append(Order("STARFRUIT", min(buy_price, lowest_bid + 1), ask_limit))
+                if is_uptrend and curr_pos < 0:
+                    orders.append(Order("STARFRUIT", min(buy_price + 1, lowest_bid + 1), ask_limit))
+                elif is_downtrend and curr_pos > 0:
+                    orders.append(Order("STARFRUIT", min(buy_price - 1, lowest_bid + 1), ask_limit))
+                else:
+                    orders.append(Order("STARFRUIT", min(buy_price, lowest_bid + 1), ask_limit))
 
         # selling logic
         if len(order_depth.buy_orders) != 0:
@@ -347,14 +346,12 @@ class Trader:
 
             # market make
             if bid_limit > 0:
-                # if is_downtrend and curr_pos > 0:
-                #     orders.append(Order("STARFRUIT", max(sell_price - 1, highest_ask - 2), -bid_limit))
-                # elif is_downtrend and curr_pos > 8:
-                #     orders.append(Order("STARFRUIT", max(sell_price - 2, highest_ask - 3), -bid_limit))
-                # elif is_uptrend and curr_pos < 0:
-                #     orders.append(Order("STARFRUIT", max(sell_price + 1, highest_ask - 1), -bid_limit))
-                # else:
-                orders.append(Order("STARFRUIT", max(sell_price, highest_ask - 1), -bid_limit))
+                if is_downtrend and curr_pos > 0:
+                    orders.append(Order("STARFRUIT", max(sell_price - 1, highest_ask - 1), -bid_limit))
+                elif is_uptrend and curr_pos < 0:
+                    orders.append(Order("STARFRUIT", max(sell_price + 1, highest_ask - 1), -bid_limit))
+                else:
+                    orders.append(Order("STARFRUIT", max(sell_price, highest_ask - 1), -bid_limit))
 
         return orders
 
