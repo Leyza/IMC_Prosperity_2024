@@ -94,8 +94,9 @@ logger = Logger()
 
 
 class Trader:
-    POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50}
+    POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0}
+    MAX_OBSERVATION_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 0, "ORCHIDS": 50}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -205,6 +206,16 @@ class Trader:
         for i, x in enumerate(price_history[-len(coef):]):
             pred += x["price"] * coef[i]
         return pred
+
+    def predict_from_conversions(self, conversion_observation, coef, intercept):
+        """
+        Predict next price by applying coefficients and intercept to price and conversion observation information.
+        """
+        price = (conversion_observation.bidPrice + conversion_observation.askPrice) / 2
+        sun = conversion_observation.sunlight
+        humidity = conversion_observation.humidity
+
+        return price * coef[0] + sun * coef[1] + humidity * coef[2] + intercept
 
     def amethyst_algo(self, state, order_depth):
         orders: List[Order] = []
@@ -327,6 +338,55 @@ class Trader:
 
         return orders
 
+    def orchids_algo(self, state, order_depth):
+        orders: List[Order] = []
+        conversions = 0
+
+        coefs = [0.999748521, 0.0000150481829, 0.00140760301]
+        intercept = 0.1190749563834288
+
+        if "ORCHIDS" not in state.observations.conversionObservations:
+            return orders
+
+        observation = state.observations.conversionObservations["ORCHIDS"]
+        predicted_price = int(round(self.predict_from_conversions(observation, coefs, intercept)))
+
+        curr_pos = state.position["ORCHIDS"] if "ORCHIDS" in state.position else 0
+        ask_limit = self.POSITION_LIMITS["ORCHIDS"] - curr_pos
+        bid_limit = self.POSITION_LIMITS["ORCHIDS"] + curr_pos
+
+        highest_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
+        lowest_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
+
+        # buying logic
+        if len(order_depth.sell_orders) != 0:
+            # market take
+            for ask, amt in list(order_depth.sell_orders.items()):
+                ask_amt = abs(amt)
+
+                if ask_limit > 0 and int(ask) + observation.exportTariff + observation.transportFees < predicted_price:
+                    orders.append(Order("ORCHIDS", ask, min(ask_amt, ask_limit)))
+                    ask_limit -= min(ask_amt, ask_limit)
+
+        # selling logic
+        if len(order_depth.buy_orders) != 0:
+            # market take
+            for bid, amt in list(order_depth.buy_orders.items()):
+                bid_amt = abs(amt)
+
+                if bid_limit > 0 and int(bid) - observation.importTariff - observation.transportFees > predicted_price:
+                    orders.append(Order("ORCHIDS", bid, -min(bid_amt, bid_limit)))
+                    bid_limit -= min(bid_amt, bid_limit)
+
+        # conversion logic
+        if curr_pos > 0 and observation.bidPrice >= predicted_price:
+            conversions -= curr_pos
+        elif curr_pos < 0 and observation.askPrice <= predicted_price:
+            conversions -= curr_pos
+
+        logger.print(f"Orchids predicted price is {predicted_price} | requested conversion is {conversions}")
+        return orders, conversions
+
     def run(self, state: TradingState):
 
         if state.traderData == "":
@@ -363,16 +423,23 @@ class Trader:
 
         # calculate orders for each product
         orders = {}
+        conversions = 0
         for product in state.order_depths:
             order_depth: OrderDepth = state.order_depths[product]
             res: List[Order] = []
+            conv = 0
 
             if product == "AMETHYSTS":
-                res = self.amethyst_algo(state, order_depth)
+                # res = self.amethyst_algo(state, order_depth)
+                pass
             elif product == "STARFRUIT":
-                res = self.starfruit_algo(state, order_depth, price_history)
+                # res = self.starfruit_algo(state, order_depth, price_history)
+                pass
+            elif product == "ORCHIDS":
+                res, conv = self.orchids_algo(state, order_depth)
 
             orders[product] = res
+            conversions += conv
 
         trader_data = json.dumps(price_history)
         conversions = 0
