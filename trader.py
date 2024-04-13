@@ -421,14 +421,7 @@ class Trader:
                 orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask), lowest_ask - 1), -q))
                 orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask), lowest_ask - 1) + 1, -(bid_limit - q)))
 
-        # check how many positions we hold that could be profitable if converted now
-        # sellable_quant = self.get_own_trades_quant(state, "ORCHIDS", profitable_bid, True, False)
-        # buyable_quant = self.get_own_trades_quant(state, "ORCHIDS", profitable_ask, False, True)
-
         # conversion logic
-        # conversions -= sellable_quant
-        # conversions += buyable_quant
-        # conversions = max()
         if curr_pos > 0:
             conversions -= curr_pos
         elif curr_pos < 0:
@@ -482,11 +475,9 @@ class Trader:
             conv = 0
 
             if product == "AMETHYSTS":
-                # res = self.amethyst_algo(state, order_depth)
-                pass
+                res = self.amethyst_algo(state, order_depth)
             elif product == "STARFRUIT":
-                # res = self.starfruit_algo(state, order_depth, price_history)
-                pass
+                res = self.starfruit_algo(state, order_depth, price_history)
             elif product == "ORCHIDS":
                 res, conv = self.orchids_algo(state, order_depth)
 
