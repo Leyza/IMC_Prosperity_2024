@@ -211,11 +211,11 @@ class Trader:
         """
         Predict next price by applying coefficients and intercept to price and conversion observation information.
         """
-        price = (conversion_observation.bidPrice + conversion_observation.askPrice) / 2
         sun = conversion_observation.sunlight
         humidity = conversion_observation.humidity
 
-        return price * coef[0] + sun * coef[1] + humidity * coef[2] + intercept
+        return conversion_observation.bidPrice * coef[0] + sun * coef[1] + humidity * coef[2] + intercept, \
+            conversion_observation.askPrice * coef[0] + sun * coef[1] + humidity * coef[2] + intercept
 
     def amethyst_algo(self, state, order_depth):
         orders: List[Order] = []
@@ -349,7 +349,9 @@ class Trader:
             return orders
 
         observation = state.observations.conversionObservations["ORCHIDS"]
-        predicted_price = int(round(self.predict_from_conversions(observation, coefs, intercept)))
+        pred_bid, pred_ask = self.predict_from_conversions(observation, coefs, intercept)
+        foreign_bid = observation.bidPrice
+        foreign_ask = observation.askPrice
 
         curr_pos = state.position["ORCHIDS"] if "ORCHIDS" in state.position else 0
         ask_limit = self.POSITION_LIMITS["ORCHIDS"] - curr_pos
@@ -364,9 +366,13 @@ class Trader:
             for ask, amt in list(order_depth.sell_orders.items()):
                 ask_amt = abs(amt)
 
-                if ask_limit > 0 and int(ask) + observation.exportTariff + observation.transportFees < predicted_price:
+                if ask_limit > 0 and int(ask) < foreign_bid - observation.exportTariff - observation.transportFees:
                     orders.append(Order("ORCHIDS", ask, min(ask_amt, ask_limit)))
                     ask_limit -= min(ask_amt, ask_limit)
+                # elif ask_limit > 0 and cpos < 0 and int(ask) <= pred_bid + 0.5 + observation.importTariff + observation.transportFees:
+                #     orders.append(Order("ORCHIDS", ask, min(ask_amt, min(-curr_pos, ask_limit))))
+                #     ask_limit -= min(ask_amt, min(-curr_pos, ask_limit))
+                #     cpos += min(ask_amt, min(-curr_pos, ask_limit))
 
         # selling logic
         if len(order_depth.buy_orders) != 0:
@@ -374,17 +380,23 @@ class Trader:
             for bid, amt in list(order_depth.buy_orders.items()):
                 bid_amt = abs(amt)
 
-                if bid_limit > 0 and int(bid) - observation.importTariff - observation.transportFees > predicted_price:
+                if bid_limit > 0 and int(bid) > foreign_ask + observation.importTariff + observation.transportFees:
                     orders.append(Order("ORCHIDS", bid, -min(bid_amt, bid_limit)))
                     bid_limit -= min(bid_amt, bid_limit)
+                # elif bid_limit > 0 and cpos > 0 and int(bid) >= pred_ask - 0.5 - observation.exportTariff - observation.transportFees:
+                #     orders.append(Order("ORCHIDS", bid, -min(bid_amt, min(curr_pos, bid_limit))))
+                #     bid_limit -= min(bid_amt, min(curr_pos, bid_limit))
+                #     cpos -= min(bid_amt, min(curr_pos, bid_limit))
 
         # conversion logic
-        if curr_pos > 0 and observation.bidPrice >= predicted_price:
+        if curr_pos > 0:
             conversions -= curr_pos
-        elif curr_pos < 0 and observation.askPrice <= predicted_price:
+        elif curr_pos < 0:
             conversions -= curr_pos
 
-        logger.print(f"Orchids predicted price is {predicted_price} | requested conversion is {conversions}")
+        logger.print(f"Orchids predicted bid is {pred_bid} | predicted ask is {pred_ask} | requested conversion is {conversions}")
+        logger.print(f"Buy price is < {foreign_bid - observation.exportTariff - observation.transportFees} | Close buy price is >= {foreign_bid}")
+        logger.print(f"Sell price is > {foreign_ask + observation.importTariff + observation.transportFees} | Close sell price is <= {foreign_ask}")
         return orders, conversions
 
     def run(self, state: TradingState):
@@ -442,7 +454,6 @@ class Trader:
             conversions += conv
 
         trader_data = json.dumps(price_history)
-        conversions = 0
 
         logger.flush(state, orders, conversions, "trader_data")
         return orders, conversions, trader_data
