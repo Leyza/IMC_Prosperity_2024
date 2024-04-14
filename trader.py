@@ -401,9 +401,9 @@ class Trader:
 
             # market make
             if ask_limit > 0:
-                q = ask_limit // 20 * 2
-                orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 2, math.ceil(foreign_ask)), q))
-                orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 1, math.ceil(foreign_ask)), ask_limit - q))
+                # q = ask_limit // 20 * 1
+                # orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 2, math.ceil(foreign_ask)), q))
+                orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 1, math.ceil(foreign_ask) - 1), ask_limit))
 
         # selling logic
         if len(order_depth.buy_orders) != 0:
@@ -417,9 +417,9 @@ class Trader:
 
             # market make
             if bid_limit > 0:
-                q = bid_limit // 20 * 2
-                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 2, math.floor(foreign_bid)), -q))
-                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 1, math.floor(foreign_bid)), -(bid_limit - q)))
+                # q = bid_limit // 20 * 1
+                # orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 2, math.ceil(foreign_bid) - 1), -q))
+                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 1, math.ceil(foreign_bid) - 1), -bid_limit))
 
         # conversion logic
         if curr_pos > 0:
