@@ -1,4 +1,5 @@
 .idea/*
 backtests/*
+data/*
 __pycache__/*
 trader_test.py
