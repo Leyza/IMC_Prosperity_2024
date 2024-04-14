@@ -392,40 +392,34 @@ class Trader:
         # buying logic
         if len(order_depth.sell_orders) != 0:
             # market take
-            for ask, amt in list(order_depth.sell_orders.items()):
-                ask_amt = abs(amt)
-
-                if ask_limit > 0 and int(ask) < profitable_bid:
-                    orders.append(Order("ORCHIDS", ask, min(ask_amt, ask_limit)))
-                    ask_limit -= min(ask_amt, ask_limit)
+            # for ask, amt in list(order_depth.sell_orders.items()):
+            #     ask_amt = abs(amt)
+            #
+            #     if ask_limit > 0 and int(ask) < profitable_bid:
+            #         orders.append(Order("ORCHIDS", ask, min(ask_amt, ask_limit)))
+            #         ask_limit -= min(ask_amt, ask_limit)
 
             # market make
             if ask_limit > 0:
-                orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 1, math.ceil(foreign_ask)), ask_limit))
-                # q1 = (ask_limit // 20) * 12
-                # q2 = (ask_limit // 20)
-                # orders.append(Order("ORCHIDS", math.floor(profitable_bid) - 2, q1))
-                # orders.append(Order("ORCHIDS", math.floor(profitable_bid) - 1, ask_limit - q1 - q2))
-                # orders.append(Order("ORCHIDS", math.floor(profitable_bid) - 3, q2))
+                q = ask_limit // 20 * 2
+                orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 2, math.ceil(foreign_ask)), q))
+                orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 1, math.ceil(foreign_ask)), ask_limit - q))
 
         # selling logic
         if len(order_depth.buy_orders) != 0:
             # market take
-            for bid, amt in list(order_depth.buy_orders.items()):
-                bid_amt = abs(amt)
-
-                if bid_limit > 0 and int(bid) > profitable_ask:
-                    orders.append(Order("ORCHIDS", bid, -min(bid_amt, bid_limit)))
-                    bid_limit -= min(bid_amt, bid_limit)
+            # for bid, amt in list(order_depth.buy_orders.items()):
+            #     bid_amt = abs(amt)
+            #
+            #     if bid_limit > 0 and int(bid) > profitable_ask:
+            #         orders.append(Order("ORCHIDS", bid, -min(bid_amt, bid_limit)))
+            #         bid_limit -= min(bid_amt, bid_limit)
 
             # market make
             if bid_limit > 0:
-                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 1, math.floor(foreign_bid)), -bid_limit))
-                # q1 = (bid_limit // 20) * 12
-                # q2 = (bid_limit // 20)
-                # orders.append(Order("ORCHIDS", math.ceil(profitable_ask) + 2, -q1))
-                # orders.append(Order("ORCHIDS", math.ceil(profitable_ask) + 1, -(bid_limit - q1 - q2)))
-                # orders.append(Order("ORCHIDS", math.ceil(profitable_ask) + 3, -q2))
+                q = bid_limit // 20 * 2
+                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 2, math.floor(foreign_bid)), -q))
+                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 1, math.floor(foreign_bid)), -(bid_limit - q)))
 
         # conversion logic
         if curr_pos > 0:
