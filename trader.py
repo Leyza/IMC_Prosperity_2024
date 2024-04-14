@@ -419,7 +419,7 @@ class Trader:
             if bid_limit > 0:
                 # q = bid_limit // 20 * 1
                 # orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 2, math.ceil(foreign_bid) - 1), -q))
-                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 1, math.ceil(foreign_bid) - 1), -bid_limit))
+                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask + 1.5), math.ceil(foreign_bid) - 1), -bid_limit))
 
         # conversion logic
         if curr_pos > 0:
