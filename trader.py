@@ -96,7 +96,6 @@ logger = Logger()
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100}
     MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0}
-    MAX_OBSERVATION_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 0, "ORCHIDS": 50}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -364,7 +363,7 @@ class Trader:
         foreign_bid = observation.bidPrice
         foreign_ask = observation.askPrice
 
-        # calculate price we bought/sold at in order to be profitable if convert now
+        # calculate price we buy/sell at in order to be profitable if convert now
         profitable_bid = foreign_bid - observation.exportTariff - observation.transportFees
         profitable_ask = foreign_ask + observation.importTariff + observation.transportFees
 
@@ -372,18 +371,11 @@ class Trader:
         ask_limit = self.POSITION_LIMITS["ORCHIDS"]
         bid_limit = self.POSITION_LIMITS["ORCHIDS"]
 
-        lowest_ask, _ = list(order_depth.sell_orders.items())[0] if len(order_depth.sell_orders) != 0 else float('inf')
-        highest_bid, _ = list(order_depth.buy_orders.items())[0] if len(order_depth.buy_orders) != 0 else 0
-
         # buying logic
-        # market make
-        if ask_limit > 0:
-            orders.append(Order("ORCHIDS", min(math.floor(profitable_bid), math.floor(foreign_ask) + 1), ask_limit))
+        orders.append(Order("ORCHIDS", min(math.floor(profitable_bid), math.floor(foreign_ask) + 1), ask_limit))
 
         # selling logic
-        # market make
-        if bid_limit > 0:
-            orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask), math.ceil(foreign_bid) - 1), -bid_limit))
+        orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask), math.ceil(foreign_bid) - 1), -bid_limit))
 
         # conversion logic
         conversions -= curr_pos
