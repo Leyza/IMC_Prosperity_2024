@@ -94,8 +94,8 @@ logger = Logger()
 
 
 class Trader:
-    POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0}
+    POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 1, "STRAWBERRIES": 1, "ROSES": 1, "GIFT_BASKET": 1}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -383,6 +383,70 @@ class Trader:
         logger.print(f"Profitable bid is {profitable_bid} | profitable ask is {profitable_ask} | requested conversion is {conversions}")
         return orders, conversions
 
+    def gift_basket_algo(self, state, order_depth, price_history):
+        orders: List[Order] = []
+
+        if "CHOCOLATE" not in price_history or len(price_history["CHOCOLATE"]) == 0 or \
+            "STRAWBERRIES" not in price_history or len(price_history["STRAWBERRIES"]) == 0 or \
+            "ROSES" not in price_history or len(price_history["ROSES"]) == 0 or \
+            "GIFT_BASKET" not in price_history or len(price_history["GIFT_BASKET"]) == 0:
+            return orders
+
+        choco_price = price_history["CHOCOLATE"][-1]["price"]
+        straw_price = price_history["STRAWBERRIES"][-1]["price"]
+        rose_price = price_history["ROSES"][-1]["price"]
+
+        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 394
+        open_spread = 40
+        close_spread = 5
+        gift_price = price_history["GIFT_BASKET"][-1]["price"]
+
+        curr_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
+        ask_limit = self.POSITION_LIMITS["GIFT_BASKET"] - curr_pos
+        bid_limit = self.POSITION_LIMITS["GIFT_BASKET"] + curr_pos
+
+        highest_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
+        lowest_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
+
+        # buying logic
+        # if len(order_depth.sell_orders) != 0:
+        #     # market take
+        #     for ask, amt in list(order_depth.sell_orders.items()):
+        #         ask_amt = abs(amt)
+        #
+        #         if ask_limit > 0 and curr_pos < 0 and int(ask) < combined_price + close_spread:
+        #             orders.append(Order("GIFT_BASKET", ask, min(ask_amt, min(abs(curr_pos), ask_limit))))
+        #             ask_limit -= min(ask_amt, min(abs(curr_pos), ask_limit))
+
+        # market make
+        if ask_limit > 0:
+            if curr_pos < 0:
+                orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + close_spread, min(abs(curr_pos), ask_limit)))
+                ask_limit -= min(abs(curr_pos), ask_limit)
+
+            orders.append(Order("GIFT_BASKET", math.floor(combined_price) - open_spread, ask_limit))
+
+        # selling logic
+        # if len(order_depth.buy_orders) != 0:
+            # market take
+            # for bid, amt in list(order_depth.buy_orders.items()):
+            #     bid_amt = abs(amt)
+            #
+            #     if bid_limit > 0 and curr_pos > 0 and int(bid) > combined_price - close_spread:
+            #         orders.append(Order("GIFT_BASKET", bid, -min(bid_amt, min(abs(curr_pos), bid_limit))))
+            #         bid_limit -= min(bid_amt, min(abs(curr_pos), bid_limit))
+
+        # market make
+        if bid_limit > 0:
+            if curr_pos > 0:
+                orders.append(Order("GIFT_BASKET", math.floor(combined_price) - close_spread, -min(abs(curr_pos), bid_limit)))
+                bid_limit -= min(abs(curr_pos), bid_limit)
+
+            orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + open_spread, -bid_limit))
+
+        logger.print(f"Gift basket combined price {combined_price} | current price {gift_price}")
+        return orders
+
     def run(self, state: TradingState):
 
         if state.traderData == "":
@@ -426,11 +490,22 @@ class Trader:
             conv = 0
 
             if product == "AMETHYSTS":
-                res = self.amethyst_algo(state, order_depth)
+                # res = self.amethyst_algo(state, order_depth)
+                pass
             elif product == "STARFRUIT":
-                res = self.starfruit_algo(state, order_depth, price_history)
+                # res = self.starfruit_algo(state, order_depth, price_history)
+                pass
             elif product == "ORCHIDS":
-                res, conv = self.orchids_algo(state, order_depth)
+                # res, conv = self.orchids_algo(state, order_depth)
+                pass
+            elif product == "CHOCOLATE":
+                pass
+            elif product == "STRAWBERRIES":
+                pass
+            elif product == "ROSES":
+                pass
+            elif product == "GIFT_BASKET":
+                res = self.gift_basket_algo(state, order_depth, price_history)
 
             orders[product] = res
             conversions += conv
