@@ -207,16 +207,6 @@ class Trader:
             pred += x["price"] * coef[i]
         return pred
 
-    def predict_from_conversions(self, conversion_observation, coef, intercept):
-        """
-        Predict next price by applying coefficients and intercept to price and conversion observation information.
-        """
-        price = (conversion_observation.bidPrice + conversion_observation.askPrice) / 2
-        sun = conversion_observation.sunlight
-        humidity = conversion_observation.humidity
-
-        return price * coef[0] + sun * coef[1] + humidity * coef[2] + intercept
-
     def get_own_trades_quant(self, state, product, price, is_buy=False, greater=False):
         quantity = 0
         if product not in state.own_trades:
@@ -367,14 +357,10 @@ class Trader:
         orders: List[Order] = []
         conversions = 0
 
-        coefs = [0.999748521, 0.0000150481829, 0.00140760301]
-        intercept = 0.1190749563834288
-
         if "ORCHIDS" not in state.observations.conversionObservations:
             return orders
 
         observation = state.observations.conversionObservations["ORCHIDS"]
-        pred_price = self.predict_from_conversions(observation, coefs, intercept)
         foreign_bid = observation.bidPrice
         foreign_ask = observation.askPrice
 
@@ -383,53 +369,26 @@ class Trader:
         profitable_ask = foreign_ask + observation.importTariff + observation.transportFees
 
         curr_pos = state.position["ORCHIDS"] if "ORCHIDS" in state.position else 0
-        ask_limit = min(self.POSITION_LIMITS["ORCHIDS"], self.POSITION_LIMITS["ORCHIDS"] - curr_pos)
-        bid_limit = min(self.POSITION_LIMITS["ORCHIDS"], self.POSITION_LIMITS["ORCHIDS"] + curr_pos)
+        ask_limit = self.POSITION_LIMITS["ORCHIDS"]
+        bid_limit = self.POSITION_LIMITS["ORCHIDS"]
 
         lowest_ask, _ = list(order_depth.sell_orders.items())[0] if len(order_depth.sell_orders) != 0 else float('inf')
         highest_bid, _ = list(order_depth.buy_orders.items())[0] if len(order_depth.buy_orders) != 0 else 0
 
         # buying logic
-        if len(order_depth.sell_orders) != 0:
-            # market take
-            # for ask, amt in list(order_depth.sell_orders.items()):
-            #     ask_amt = abs(amt)
-            #
-            #     if ask_limit > 0 and int(ask) < profitable_bid:
-            #         orders.append(Order("ORCHIDS", ask, min(ask_amt, ask_limit)))
-            #         ask_limit -= min(ask_amt, ask_limit)
-
-            # market make
-            if ask_limit > 0:
-                # q = ask_limit // 20 * 1
-                # orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 2, math.ceil(foreign_ask)), q))
-                orders.append(Order("ORCHIDS", min(math.floor(profitable_bid) - 1, math.ceil(foreign_ask) - 1), ask_limit))
+        # market make
+        if ask_limit > 0:
+            orders.append(Order("ORCHIDS", min(math.floor(profitable_bid - 1.5), math.ceil(foreign_ask) - 1), ask_limit))
 
         # selling logic
-        if len(order_depth.buy_orders) != 0:
-            # market take
-            # for bid, amt in list(order_depth.buy_orders.items()):
-            #     bid_amt = abs(amt)
-            #
-            #     if bid_limit > 0 and int(bid) > profitable_ask:
-            #         orders.append(Order("ORCHIDS", bid, -min(bid_amt, bid_limit)))
-            #         bid_limit -= min(bid_amt, bid_limit)
-
-            # market make
-            if bid_limit > 0:
-                # q = bid_limit // 20 * 1
-                # orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask) + 2, math.ceil(foreign_bid) - 1), -q))
-                orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask + 1.5), math.ceil(foreign_bid) - 1), -bid_limit))
+        # market make
+        if bid_limit > 0:
+            orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask + 1.5), math.ceil(foreign_bid) - 1), -bid_limit))
 
         # conversion logic
-        if curr_pos > 0:
-            conversions -= curr_pos
-        elif curr_pos < 0:
-            conversions -= curr_pos
+        conversions -= curr_pos
 
-        logger.print(f"Orchids predicted price is {pred_price} | requested conversion is {conversions}")
-        logger.print(f"Profitable bid is {profitable_bid} | profitable ask is {profitable_ask}")
-        # logger.print(f"sellable {sellable_quant} | buyable {buyable_quant}")
+        logger.print(f"Profitable bid is {profitable_bid} | profitable ask is {profitable_ask} | requested conversion is {conversions}")
         return orders, conversions
 
     def run(self, state: TradingState):
