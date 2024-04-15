@@ -378,12 +378,12 @@ class Trader:
         # buying logic
         # market make
         if ask_limit > 0:
-            orders.append(Order("ORCHIDS", min(math.floor(profitable_bid - 1.5), math.ceil(foreign_ask) - 1), ask_limit))
+            orders.append(Order("ORCHIDS", min(math.floor(profitable_bid), math.floor(foreign_ask) + 1), ask_limit))
 
         # selling logic
         # market make
         if bid_limit > 0:
-            orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask + 1.5), math.ceil(foreign_bid) - 1), -bid_limit))
+            orders.append(Order("ORCHIDS", max(math.ceil(profitable_ask), math.ceil(foreign_bid) - 1), -bid_limit))
 
         # conversion logic
         conversions -= curr_pos
