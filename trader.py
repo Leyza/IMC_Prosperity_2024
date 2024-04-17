@@ -95,7 +95,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 100, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 101, "STRAWBERRIES": 101, "ROSES": 101, "GIFT_BASKET": 101}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -164,6 +164,12 @@ class Trader:
             count += 1
 
         return np.sqrt(total / count)
+
+    def ratio(self, price_history, distance=1):
+        if len(price_history) < distance + 1:
+            return 0
+
+        return price_history[-1]["price"] / price_history[-1 - distance]["price"] - 1
 
     def lin_regression(self, train_x, train_y):
         """
@@ -390,11 +396,13 @@ class Trader:
             mean = self.sma(price_history["GIFT_BASKET"], 10000, state.timestamp)
             v = self.volatility(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
 
-            open_spread = int(round(v * 0.4 + 40 * 0.6))
+            open_spread = int(round(v * 1.8 + 20))
             close_spread = int(round(v * 0.1))
         else:
             open_spread = 40
-            close_spread = -5
+            close_spread = 5
+
+        gift_ratio = self.ratio(price_history["GIFT_BASKET"], 50) if "GIFT_BASKET" in price_history else 0
 
         choco_orders = state.order_depths["CHOCOLATE"]
         straw_orders = state.order_depths["STRAWBERRIES"]
@@ -404,7 +412,7 @@ class Trader:
         straw_price = (list(straw_orders.buy_orders.items())[0][0] + list(straw_orders.sell_orders.items())[0][0]) / 2
         rose_price = (list(rose_orders.buy_orders.items())[0][0] + list(rose_orders.sell_orders.items())[0][0]) / 2
 
-        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 394
+        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 370
         gift_price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
 
         curr_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
@@ -421,7 +429,8 @@ class Trader:
                 orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + close_spread, min(abs(curr_pos), ask_limit)))
                 ask_limit -= min(abs(curr_pos), ask_limit)
 
-            orders.append(Order("GIFT_BASKET", math.floor(combined_price) - open_spread, ask_limit))
+            if abs(gift_ratio) < 0.0001:
+                orders.append(Order("GIFT_BASKET", math.floor(combined_price) - open_spread, ask_limit))
 
         # selling logic
         if bid_limit > 0:
@@ -430,9 +439,45 @@ class Trader:
                 orders.append(Order("GIFT_BASKET", math.floor(combined_price) - close_spread, -min(abs(curr_pos), bid_limit)))
                 bid_limit -= min(abs(curr_pos), bid_limit)
 
-            orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + open_spread, -bid_limit))
+            if abs(gift_ratio) < 0.0001:
+                orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + open_spread, -bid_limit))
 
         logger.print(f"Gift basket combined price {combined_price} | current price {gift_price} | open spread: {open_spread} | close spread: {close_spread}")
+        return orders
+
+    def follow_basket_algo(self, state, product, order_depth, multiplier, price_history):
+        orders: List[Order] = []
+
+        if product not in price_history or len(price_history[product]) < 100:
+            return orders
+
+        macd = self.macd(price_history[product], 4000, 10000, state.timestamp)
+
+        basket_orders = state.order_depths["GIFT_BASKET"]
+        basket_price = (list(basket_orders.buy_orders.items())[0][0] + list(basket_orders.sell_orders.items())[0][0]) / 2
+
+        basket_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
+        curr_pos = state.position[product] if product in state.position else 0
+
+        ask_limit = self.POSITION_LIMITS[product] - curr_pos
+        bid_limit = self.POSITION_LIMITS[product] + curr_pos
+
+        target_amt = basket_pos * multiplier - curr_pos
+
+        highest_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
+        lowest_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
+
+        if target_amt > 0:
+            if macd >= 0:
+                orders.append(Order(product, highest_ask, min(ask_limit, target_amt)))
+            elif curr_pos < 0:
+                orders.append(Order(product, highest_ask, min(abs(curr_pos), target_amt)))
+        elif target_amt < 0:
+            if macd <= 0:
+                orders.append(Order(product, lowest_bid, -min(bid_limit, abs(target_amt))))
+            elif curr_pos > 0:
+                orders.append(Order(product, lowest_bid, -min(curr_pos, abs(target_amt))))
+
         return orders
 
     def general_lr_algo(self, state, product, order_depth, all_trade_history):
@@ -548,12 +593,14 @@ class Trader:
                 # res, conv = self.orchids_algo(state, order_depth)
                 pass
             elif product == "CHOCOLATE":
-                # res = self.general_lr_algo(state, "CHOCOLATE", order_depth, price_history)
-                pass
+                res = self.follow_basket_algo(state, "CHOCOLATE", order_depth, 4, price_history)
+                # pass
             elif product == "STRAWBERRIES":
-                pass
+                res = self.follow_basket_algo(state, "STRAWBERRIES", order_depth, 6, price_history)
+                # pass
             elif product == "ROSES":
-                pass
+                res = self.follow_basket_algo(state, "ROSES", order_depth, 1, price_history)
+                # pass
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
 
