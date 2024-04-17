@@ -95,7 +95,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 100, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -391,10 +391,10 @@ class Trader:
             v = self.volatility(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
 
             open_spread = int(round(v * 0.4 + 40 * 0.6))
-            close_spread = int(round(v * 0.15))
+            close_spread = int(round(v * 0.1))
         else:
             open_spread = 40
-            close_spread = 5
+            close_spread = -5
 
         choco_orders = state.order_depths["CHOCOLATE"]
         straw_orders = state.order_depths["STRAWBERRIES"]
@@ -433,6 +433,67 @@ class Trader:
             orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + open_spread, -bid_limit))
 
         logger.print(f"Gift basket combined price {combined_price} | current price {gift_price} | open spread: {open_spread} | close spread: {close_spread}")
+        return orders
+
+    def general_lr_algo(self, state, product, order_depth, all_trade_history):
+        orders: List[Order] = []
+
+        # Values affecting linear regression to tune
+        num_vars = 5
+
+        if product not in all_trade_history or len(all_trade_history[product]) < num_vars * 2:
+            return orders
+
+        # linear regression to predict next price
+        train_x, train_y = self.preprocess_for_lr(all_trade_history[product], num_vars)
+        coefs, intercept = self.lin_regression(train_x, train_y)
+        predicted_price = int(round(self.predict_from_coefs(all_trade_history[product], coefs, intercept)))
+
+        buy_price = predicted_price - 1
+        sell_price = predicted_price + 1
+        logger.print(f"{product} predicted price is {predicted_price} | buy price is {buy_price} | sell price is {sell_price}")
+
+        curr_pos = state.position[product] if product in state.position else 0
+        ask_limit = self.POSITION_LIMITS[product] - curr_pos
+        bid_limit = self.POSITION_LIMITS[product] + curr_pos
+
+        lowest_ask, _ = list(order_depth.sell_orders.items())[0] if len(order_depth.sell_orders) != 0 else float('inf')
+        highest_bid, _ = list(order_depth.buy_orders.items())[0] if len(order_depth.buy_orders) != 0 else 0
+
+        # buying logic
+        if len(order_depth.sell_orders) != 0:
+            # market take
+            for ask, amt in list(order_depth.sell_orders.items()):
+                ask_amt = abs(amt)
+
+                if ask_limit > 0 and int(ask) <= buy_price:
+                    orders.append(Order(product, ask, min(ask_amt, ask_limit)))
+                    ask_limit -= min(ask_amt, ask_limit)
+                elif ask_limit > 0 and curr_pos < 0 and int(ask) == predicted_price:
+                    orders.append(Order(product, ask, min(ask_amt, min(ask_limit, abs(curr_pos)))))
+                    ask_limit -= min(ask_amt, min(ask_limit, abs(curr_pos)))
+
+            # market make
+            if ask_limit > 0:
+                orders.append(Order(product, min(buy_price, highest_bid + 1), ask_limit))
+
+        # selling logic
+        if len(order_depth.buy_orders) != 0:
+            # market take
+            for bid, amt in list(order_depth.buy_orders.items()):
+                bid_amt = abs(amt)
+
+                if bid_limit > 0 and int(bid) >= sell_price:
+                    orders.append(Order(product, bid, -min(bid_amt, bid_limit)))
+                    bid_limit -= min(bid_amt, bid_limit)
+                elif bid_limit > 0 and curr_pos > 0 and int(bid) == predicted_price:
+                    orders.append(Order(product, bid, -min(bid_amt, min(bid_limit, abs(curr_pos)))))
+                    bid_limit -= min(bid_amt, min(bid_limit, abs(curr_pos)))
+
+            # market make
+            if bid_limit > 0:
+                orders.append(Order(product, max(sell_price, lowest_ask - 1), -bid_limit))
+
         return orders
 
     def run(self, state: TradingState):
@@ -487,6 +548,7 @@ class Trader:
                 # res, conv = self.orchids_algo(state, order_depth)
                 pass
             elif product == "CHOCOLATE":
+                # res = self.general_lr_algo(state, "CHOCOLATE", order_depth, price_history)
                 pass
             elif product == "STRAWBERRIES":
                 pass
