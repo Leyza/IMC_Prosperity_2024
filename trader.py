@@ -438,7 +438,7 @@ class Trader:
         logger.print(f"Gift basket combined price {combined_price} | current price {gift_price} | open spread: {open_spread} | close spread: {close_spread}")
         return orders
 
-    def follow_basket_algo(self, state, product, order_depth, multiplier, price_history):
+    def follow_basket_algo(self, state, product, order_depth, multiplier):
         orders: List[Order] = []
 
         basket_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
@@ -456,67 +456,6 @@ class Trader:
             orders.append(Order(product, best_ask, min(ask_limit, target_amt)))
         elif target_amt < 0:
             orders.append(Order(product, best_bid, -min(bid_limit, abs(target_amt))))
-
-        return orders
-
-    def general_lr_algo(self, state, product, order_depth, all_trade_history):
-        orders: List[Order] = []
-
-        # Values affecting linear regression to tune
-        num_vars = 5
-
-        if product not in all_trade_history or len(all_trade_history[product]) < num_vars * 2:
-            return orders
-
-        # linear regression to predict next price
-        train_x, train_y = self.preprocess_for_lr(all_trade_history[product], num_vars)
-        coefs, intercept = self.lin_regression(train_x, train_y)
-        predicted_price = int(round(self.predict_from_coefs(all_trade_history[product], coefs, intercept)))
-
-        buy_price = predicted_price - 1
-        sell_price = predicted_price + 1
-        logger.print(f"{product} predicted price is {predicted_price} | buy price is {buy_price} | sell price is {sell_price}")
-
-        curr_pos = state.position[product] if product in state.position else 0
-        ask_limit = self.POSITION_LIMITS[product] - curr_pos
-        bid_limit = self.POSITION_LIMITS[product] + curr_pos
-
-        lowest_ask, _ = list(order_depth.sell_orders.items())[0] if len(order_depth.sell_orders) != 0 else float('inf')
-        highest_bid, _ = list(order_depth.buy_orders.items())[0] if len(order_depth.buy_orders) != 0 else 0
-
-        # buying logic
-        if len(order_depth.sell_orders) != 0:
-            # market take
-            for ask, amt in list(order_depth.sell_orders.items()):
-                ask_amt = abs(amt)
-
-                if ask_limit > 0 and int(ask) <= buy_price:
-                    orders.append(Order(product, ask, min(ask_amt, ask_limit)))
-                    ask_limit -= min(ask_amt, ask_limit)
-                elif ask_limit > 0 and curr_pos < 0 and int(ask) == predicted_price:
-                    orders.append(Order(product, ask, min(ask_amt, min(ask_limit, abs(curr_pos)))))
-                    ask_limit -= min(ask_amt, min(ask_limit, abs(curr_pos)))
-
-            # market make
-            if ask_limit > 0:
-                orders.append(Order(product, min(buy_price, highest_bid + 1), ask_limit))
-
-        # selling logic
-        if len(order_depth.buy_orders) != 0:
-            # market take
-            for bid, amt in list(order_depth.buy_orders.items()):
-                bid_amt = abs(amt)
-
-                if bid_limit > 0 and int(bid) >= sell_price:
-                    orders.append(Order(product, bid, -min(bid_amt, bid_limit)))
-                    bid_limit -= min(bid_amt, bid_limit)
-                elif bid_limit > 0 and curr_pos > 0 and int(bid) == predicted_price:
-                    orders.append(Order(product, bid, -min(bid_amt, min(bid_limit, abs(curr_pos)))))
-                    bid_limit -= min(bid_amt, min(bid_limit, abs(curr_pos)))
-
-            # market make
-            if bid_limit > 0:
-                orders.append(Order(product, max(sell_price, lowest_ask - 1), -bid_limit))
 
         return orders
 
@@ -563,23 +502,17 @@ class Trader:
             conv = 0
 
             if product == "AMETHYSTS":
-                # res = self.amethyst_algo(state, order_depth)
-                pass
+                res = self.amethyst_algo(state, order_depth)
             elif product == "STARFRUIT":
-                # res = self.starfruit_algo(state, order_depth, price_history)
-                pass
+                res = self.starfruit_algo(state, order_depth, price_history)
             elif product == "ORCHIDS":
-                # res, conv = self.orchids_algo(state, order_depth)
-                pass
+                res, conv = self.orchids_algo(state, order_depth)
             elif product == "CHOCOLATE":
-                res = self.follow_basket_algo(state, "CHOCOLATE", order_depth, 4, price_history)
-                # pass
+                res = self.follow_basket_algo(state, "CHOCOLATE", order_depth, 4)
             elif product == "STRAWBERRIES":
-                res = self.follow_basket_algo(state, "STRAWBERRIES", order_depth, 6, price_history)
-                # pass
+                res = self.follow_basket_algo(state, "STRAWBERRIES", order_depth, 6)
             elif product == "ROSES":
-                res = self.follow_basket_algo(state, "ROSES", order_depth, 1, price_history)
-                # pass
+                res = self.follow_basket_algo(state, "ROSES", order_depth, 1)
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
 
