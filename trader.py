@@ -95,7 +95,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 101, "STRAWBERRIES": 101, "ROSES": 101, "GIFT_BASKET": 101}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -392,7 +392,7 @@ class Trader:
     def gift_basket_algo(self, state, order_depth, price_history):
         orders: List[Order] = []
 
-        if "GIFT_BASKET" in price_history and len(price_history["GIFT_BASKET"]) > 100:
+        if "GIFT_BASKET" in price_history and len(price_history["GIFT_BASKET"]) > 10:
             mean = self.sma(price_history["GIFT_BASKET"], 10000, state.timestamp)
             v = self.volatility(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
 
@@ -401,10 +401,6 @@ class Trader:
         else:
             open_spread = 80
             close_spread = -5
-
-        ratio_short = self.ratio(price_history["GIFT_BASKET"], 30) if "GIFT_BASKET" in price_history else 0
-        ratio_long = self.ratio(price_history["GIFT_BASKET"], 80) if "GIFT_BASKET" in price_history else 0
-        macd = self.macd(price_history["GIFT_BASKET"], 4000, 10000, state.timestamp) if "GIFT_BASKET" in price_history else 0
 
         choco_orders = state.order_depths["CHOCOLATE"]
         straw_orders = state.order_depths["STRAWBERRIES"]
@@ -420,9 +416,6 @@ class Trader:
         curr_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
         ask_limit = self.POSITION_LIMITS["GIFT_BASKET"] - curr_pos
         bid_limit = self.POSITION_LIMITS["GIFT_BASKET"] + curr_pos
-
-        highest_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
-        lowest_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
 
         # buying logic
         if ask_limit > 0:
@@ -448,14 +441,6 @@ class Trader:
     def follow_basket_algo(self, state, product, order_depth, multiplier, price_history):
         orders: List[Order] = []
 
-        # if product not in price_history or len(price_history[product]) < 100:
-        #     return orders
-
-        macd = self.macd(price_history[product], 1000, 4000, state.timestamp) if product in price_history else 0
-
-        basket_orders = state.order_depths["GIFT_BASKET"]
-        basket_price = (list(basket_orders.buy_orders.items())[0][0] + list(basket_orders.sell_orders.items())[0][0]) / 2
-
         basket_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
         curr_pos = state.position[product] if product in state.position else 0
 
@@ -464,19 +449,13 @@ class Trader:
 
         target_amt = basket_pos * multiplier - curr_pos
 
-        highest_ask, _ = list(order_depth.sell_orders.items())[-1] if len(order_depth.sell_orders) != 0 else float('inf')
-        lowest_bid, _ = list(order_depth.buy_orders.items())[-1] if len(order_depth.buy_orders) != 0 else 0
+        best_ask, _ = list(order_depth.sell_orders.items())[0] if len(order_depth.sell_orders) != 0 else float('inf')
+        best_bid, _ = list(order_depth.buy_orders.items())[0] if len(order_depth.buy_orders) != 0 else 0
 
         if target_amt > 0:
-            # if macd >= 0:
-            orders.append(Order(product, highest_ask, min(ask_limit, target_amt)))
-            # elif curr_pos < 0:
-            #     orders.append(Order(product, highest_ask, min(abs(curr_pos), target_amt)))
+            orders.append(Order(product, best_ask, min(ask_limit, target_amt)))
         elif target_amt < 0:
-            # if macd <= 0:
-            orders.append(Order(product, lowest_bid, -min(bid_limit, abs(target_amt))))
-            # elif curr_pos > 0:
-            #     orders.append(Order(product, lowest_bid, -min(curr_pos, abs(target_amt))))
+            orders.append(Order(product, best_bid, -min(bid_limit, abs(target_amt))))
 
         return orders
 
