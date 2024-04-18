@@ -396,10 +396,10 @@ class Trader:
             mean = self.sma(price_history["GIFT_BASKET"], 10000, state.timestamp)
             v = self.volatility(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
 
-            open_spread = int(round(v * 2 + 25))
+            open_spread = int(round(v * 2.02 + 24))
             close_spread = int(round(v * 0.1)) - 5
         else:
-            open_spread = 80
+            open_spread = 85
             close_spread = -5
 
         choco_orders = state.order_depths["CHOCOLATE"]
@@ -410,7 +410,7 @@ class Trader:
         straw_price = (list(straw_orders.buy_orders.items())[0][0] + list(straw_orders.sell_orders.items())[0][0]) / 2
         rose_price = (list(rose_orders.buy_orders.items())[0][0] + list(rose_orders.sell_orders.items())[0][0]) / 2
 
-        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 360
+        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 359
         gift_price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
 
         curr_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
