@@ -396,7 +396,7 @@ class Trader:
             mean = self.sma(price_history["GIFT_BASKET"], 10000, state.timestamp)
             v = self.volatility(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
 
-            open_spread = int(round(v * 1.8 + 20))
+            open_spread = int(round(v * 2 + 25))
             close_spread = int(round(v * 0.1))
         else:
             open_spread = 80
