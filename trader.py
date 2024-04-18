@@ -396,16 +396,15 @@ class Trader:
             mean = self.sma(price_history["GIFT_BASKET"], 10000, state.timestamp)
             v = self.volatility(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
 
-            open_spread = int(round(v * 0.6 + 20))
+            open_spread = int(round(v * 1.8 + 20))
             close_spread = int(round(v * 0.1))
         else:
-            open_spread = 40
+            open_spread = 80
             close_spread = -5
-
-        open_spread = 30
 
         ratio_short = self.ratio(price_history["GIFT_BASKET"], 20) if "GIFT_BASKET" in price_history else 0
         ratio_long = self.ratio(price_history["GIFT_BASKET"], 100) if "GIFT_BASKET" in price_history else 0
+        macd = self.macd(price_history["GIFT_BASKET"], 4000, 10000, state.timestamp) if "GIFT_BASKET" in price_history else 0
 
         choco_orders = state.order_depths["CHOCOLATE"]
         straw_orders = state.order_depths["STRAWBERRIES"]
@@ -415,7 +414,7 @@ class Trader:
         straw_price = (list(straw_orders.buy_orders.items())[0][0] + list(straw_orders.sell_orders.items())[0][0]) / 2
         rose_price = (list(rose_orders.buy_orders.items())[0][0] + list(rose_orders.sell_orders.items())[0][0]) / 2
 
-        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 380
+        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 360
         gift_price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
 
         curr_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
@@ -428,9 +427,9 @@ class Trader:
         # buying logic
         if ask_limit > 0:
             # close short positions
-            # if curr_pos < 0:
-            #     orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + close_spread, min(abs(curr_pos), ask_limit)))
-            #     ask_limit -= min(abs(curr_pos), ask_limit)
+            if curr_pos < 0:
+                orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + close_spread, min(abs(curr_pos), ask_limit)))
+                ask_limit -= min(abs(curr_pos), ask_limit)
 
             # if ratio_short > 0.0005 and ratio_long > 0.0001:
             orders.append(Order("GIFT_BASKET", math.floor(combined_price) - open_spread, ask_limit))
@@ -438,9 +437,9 @@ class Trader:
         # selling logic
         if bid_limit > 0:
             # close long positions
-            # if curr_pos > 0:
-            #     orders.append(Order("GIFT_BASKET", math.floor(combined_price) - close_spread, -min(abs(curr_pos), bid_limit)))
-            #     bid_limit -= min(abs(curr_pos), bid_limit)
+            if curr_pos > 0:
+                orders.append(Order("GIFT_BASKET", math.floor(combined_price) - close_spread, -min(abs(curr_pos), bid_limit)))
+                bid_limit -= min(abs(curr_pos), bid_limit)
 
             # if ratio_short < -0.0005 and ratio_long < -0.0001:
             orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + open_spread, -bid_limit))
