@@ -165,11 +165,14 @@ class Trader:
 
         return np.sqrt(total / count)
 
-    def ratio(self, price_history, distance=1):
+    def roc(self, price_history, distance=1):
+        """
+        Price rate of change.
+        """
         if len(price_history) < distance + 1:
             return 0
 
-        return price_history[-1]["price"] / price_history[-1 - distance]["price"] - 1
+        return (price_history[-1]["price"] - price_history[-1 - distance]["price"]) / price_history[-1 - distance]["price"] * 100
 
     def lin_regression(self, train_x, train_y):
         """
