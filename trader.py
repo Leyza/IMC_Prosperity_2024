@@ -402,8 +402,8 @@ class Trader:
             open_spread = 80
             close_spread = -5
 
-        ratio_short = self.ratio(price_history["GIFT_BASKET"], 20) if "GIFT_BASKET" in price_history else 0
-        ratio_long = self.ratio(price_history["GIFT_BASKET"], 100) if "GIFT_BASKET" in price_history else 0
+        ratio_short = self.ratio(price_history["GIFT_BASKET"], 30) if "GIFT_BASKET" in price_history else 0
+        ratio_long = self.ratio(price_history["GIFT_BASKET"], 80) if "GIFT_BASKET" in price_history else 0
         macd = self.macd(price_history["GIFT_BASKET"], 4000, 10000, state.timestamp) if "GIFT_BASKET" in price_history else 0
 
         choco_orders = state.order_depths["CHOCOLATE"]
@@ -431,7 +431,6 @@ class Trader:
                 orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + close_spread, min(abs(curr_pos), ask_limit)))
                 ask_limit -= min(abs(curr_pos), ask_limit)
 
-            # if ratio_short > 0.0005 and ratio_long > 0.0001:
             orders.append(Order("GIFT_BASKET", math.floor(combined_price) - open_spread, ask_limit))
 
         # selling logic
@@ -441,7 +440,6 @@ class Trader:
                 orders.append(Order("GIFT_BASKET", math.floor(combined_price) - close_spread, -min(abs(curr_pos), bid_limit)))
                 bid_limit -= min(abs(curr_pos), bid_limit)
 
-            # if ratio_short < -0.0005 and ratio_long < -0.0001:
             orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + open_spread, -bid_limit))
 
         logger.print(f"Gift basket combined price {combined_price} | current price {gift_price} | open spread: {open_spread} | close spread: {close_spread}")
@@ -450,10 +448,10 @@ class Trader:
     def follow_basket_algo(self, state, product, order_depth, multiplier, price_history):
         orders: List[Order] = []
 
-        if product not in price_history or len(price_history[product]) < 100:
-            return orders
+        # if product not in price_history or len(price_history[product]) < 100:
+        #     return orders
 
-        macd = self.macd(price_history[product], 4000, 10000, state.timestamp)
+        macd = self.macd(price_history[product], 1000, 4000, state.timestamp) if product in price_history else 0
 
         basket_orders = state.order_depths["GIFT_BASKET"]
         basket_price = (list(basket_orders.buy_orders.items())[0][0] + list(basket_orders.sell_orders.items())[0][0]) / 2
