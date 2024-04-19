@@ -441,27 +441,6 @@ class Trader:
         logger.print(f"Gift basket combined price {combined_price} | current price {gift_price} | open spread: {open_spread} | close spread: {close_spread}")
         return orders
 
-    def follow_basket_algo(self, state, product, order_depth, multiplier):
-        orders: List[Order] = []
-
-        basket_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
-        curr_pos = state.position[product] if product in state.position else 0
-
-        ask_limit = self.POSITION_LIMITS[product] - curr_pos
-        bid_limit = self.POSITION_LIMITS[product] + curr_pos
-
-        target_amt = basket_pos * multiplier - curr_pos
-
-        best_ask, _ = list(order_depth.sell_orders.items())[0] if len(order_depth.sell_orders) != 0 else float('inf')
-        best_bid, _ = list(order_depth.buy_orders.items())[0] if len(order_depth.buy_orders) != 0 else 0
-
-        if target_amt > 0:
-            orders.append(Order(product, best_ask, min(ask_limit, target_amt)))
-        elif target_amt < 0:
-            orders.append(Order(product, best_bid, -min(bid_limit, abs(target_amt))))
-
-        return orders
-
     def run(self, state: TradingState):
 
         if state.traderData == "":
@@ -510,12 +489,6 @@ class Trader:
                 res = self.starfruit_algo(state, order_depth, price_history)
             elif product == "ORCHIDS":
                 res, conv = self.orchids_algo(state, order_depth)
-            elif product == "CHOCOLATE":
-                res = self.follow_basket_algo(state, "CHOCOLATE", order_depth, 4)
-            elif product == "STRAWBERRIES":
-                res = self.follow_basket_algo(state, "STRAWBERRIES", order_depth, 6)
-            elif product == "ROSES":
-                res = self.follow_basket_algo(state, "ROSES", order_depth, 1)
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
 
