@@ -5,6 +5,8 @@ import numpy as np
 import jsonpickle as js
 import json
 import math
+from math import erf, sqrt, log, exp
+
 
 
 class Logger:
@@ -94,8 +96,8 @@ logger = Logger()
 
 
 class Trader:
-    POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101}
+    POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60, "COCONUT": 300, "COCONUT_COUPON": 600}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 0, "COCONUT_COUPON": 101}
     TIMESTAMP_INTERVAL = 100
 
     def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
@@ -214,6 +216,17 @@ class Trader:
         for i, x in enumerate(price_history[-len(coef):]):
             pred += x["price"] * coef[i]
         return pred
+
+    def phi(self, x):
+        """Cumulative distribution function for the standard normal distribution"""
+        return (1.0 + erf(x / sqrt(2.0))) / 2.0
+
+    def black_scholes(self, price, K, std, r, dt):
+        d_plus = (np.log(price / K) + dt * (r + std ** 2 / 2)) / (sqrt(dt) * std)
+        d_minus = d_plus - sqrt(dt) * std
+        call_price = self.phi(d_plus) * price - self.phi(d_minus) * K * exp(-r * dt)
+
+        return call_price
 
     def get_own_trades_quant(self, state, product, price, is_buy=False, greater=False):
         quantity = 0
@@ -441,6 +454,88 @@ class Trader:
         logger.print(f"Gift basket combined price {combined_price} | current price {gift_price} | open spread: {open_spread} | close spread: {close_spread}")
         return orders
 
+    def coconut_coupon_algo(self, state, order_depth, price_history):
+        orders: List[Order] = []
+
+        K = 10000
+        std = 0.00010293960957374845
+        r = 0
+        dt = 240 * 10000
+
+        co_orders = state.order_depths["COCONUT"]
+        co_price = (list(co_orders.buy_orders.items())[0][0] + list(co_orders.sell_orders.items())[0][0]) / 2
+
+        roc = self.roc(price_history["COCONUT_COUPON"], 50) if "COCONUT_COUPON" in price_history else 0
+
+        bs = int(round(self.black_scholes(co_price, K, std, r, dt)))
+        open_spread = 5
+        close_spread = -4
+
+        curr_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
+        ask_limit = self.POSITION_LIMITS["COCONUT_COUPON"] - curr_pos
+        bid_limit = self.POSITION_LIMITS["COCONUT_COUPON"] + curr_pos
+
+        highest_ask = list(order_depth.sell_orders.items())[-1][0] if len(order_depth.sell_orders) > 0 else float('inf')
+        lowest_bid = list(order_depth.buy_orders.items())[-1][0] if len(order_depth.buy_orders) > 0 else 0
+
+        roc = self.roc(price_history["COCONUT_COUPON"], 30) if "COCONUT_COUPON" in price_history else 0
+
+        # buying logic
+        if len(order_depth.sell_orders) != 0:
+            # market take
+            # for ask, amt in list(order_depth.sell_orders.items()):
+            #     ask_amt = abs(amt)
+            #
+            #     if ask_limit > 0 and int(ask) <= bs - open_spread:
+            #         orders.append(Order("COCONUT_COUPON", ask, min(ask_amt, ask_limit)))
+            #         ask_limit -= min(ask_amt, ask_limit)
+            #     elif ask_limit > 0 and curr_pos < 0 and int(ask) <= bs + close_spread:
+            #         orders.append(Order("COCONUT_COUPON", ask, min(ask_amt, min(ask_limit, abs(curr_pos)))))
+            #         ask_limit -= min(ask_amt, min(ask_limit, abs(curr_pos)))
+
+            # market make
+            if ask_limit > 0:
+                orders.append(Order("COCONUT_COUPON", min(bs - open_spread, lowest_bid + 1), ask_limit))
+
+        # selling logic
+        if len(order_depth.buy_orders) != 0:
+            # market take
+            # for bid, amt in list(order_depth.buy_orders.items()):
+            #     bid_amt = abs(amt)
+            #
+            #     if bid_limit > 0 and int(bid) >= bs + open_spread:
+            #         orders.append(Order("COCONUT_COUPON", bid, -min(bid_amt, bid_limit)))
+            #         bid_limit -= min(bid_amt, bid_limit)
+            #     elif bid_limit > 0 and curr_pos > 0 and int(bid) >= bs - close_spread:
+            #         orders.append(Order("COCONUT_COUPON", bid, -min(bid_amt, min(bid_limit, abs(curr_pos)))))
+            #         bid_limit -= min(bid_amt, min(bid_limit, abs(curr_pos)))
+
+            # market make
+            if bid_limit > 0:
+                orders.append(Order("COCONUT_COUPON", max(bs + open_spread, highest_ask - 1), -bid_limit))
+
+        # # buying logic
+        # if ask_limit > 0:
+        #     # close short positions
+        #     if curr_pos < 0:
+        #         orders.append(
+        #             Order("COCONUT_COUPON", math.ceil(bs) + close_spread, min(abs(curr_pos), ask_limit)))
+        #         ask_limit -= min(abs(curr_pos), ask_limit)
+        #
+        #     orders.append(Order("COCONUT_COUPON", math.floor(bs) - open_spread, ask_limit))
+        #
+        # # selling logic
+        # if bid_limit > 0:
+        #     # close long positions
+        #     if curr_pos > 0:
+        #         orders.append(
+        #             Order("COCONUT_COUPON", math.floor(bs) - close_spread, -min(abs(curr_pos), bid_limit)))
+        #         bid_limit -= min(abs(curr_pos), bid_limit)
+        #
+        #     orders.append(Order("COCONUT_COUPON", math.ceil(bs) + open_spread, -bid_limit))
+
+        return orders
+
     def run(self, state: TradingState):
 
         if state.traderData == "":
@@ -491,6 +586,8 @@ class Trader:
                 res, conv = self.orchids_algo(state, order_depth)
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
+            elif product == "COCONUT_COUPON":
+                res = self.coconut_coupon_algo(state, order_depth, price_history)
 
             orders[product] = res
             conversions += conv
