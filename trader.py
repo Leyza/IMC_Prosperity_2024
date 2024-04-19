@@ -460,16 +460,21 @@ class Trader:
         K = 10000
         std = 0.00010293960957374845
         r = 0
-        dt = 240 * 10000
+        dt = 250 * 10000
 
         co_orders = state.order_depths["COCONUT"]
         co_price = (list(co_orders.buy_orders.items())[0][0] + list(co_orders.sell_orders.items())[0][0]) / 2
 
         roc = self.roc(price_history["COCONUT_COUPON"], 50) if "COCONUT_COUPON" in price_history else 0
 
-        bs = int(round(self.black_scholes(co_price, K, std, r, dt)))
+        bs = int(round(self.black_scholes(co_price, K, std, r, dt))) - 14
+        price_history["BS"].append({
+            "timestamp": state.timestamp,
+            "price": bs
+        })
+
         open_spread = 5
-        close_spread = -4
+        # close_spread = -5
 
         curr_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
         ask_limit = self.POSITION_LIMITS["COCONUT_COUPON"] - curr_pos
@@ -479,9 +484,10 @@ class Trader:
         lowest_bid = list(order_depth.buy_orders.items())[-1][0] if len(order_depth.buy_orders) > 0 else 0
 
         roc = self.roc(price_history["COCONUT_COUPON"], 30) if "COCONUT_COUPON" in price_history else 0
+        roc_bs = self.roc(price_history["BS"], 30) if "BS" in price_history else 0
 
         # buying logic
-        if len(order_depth.sell_orders) != 0:
+        # if len(order_depth.sell_orders) != 0:
             # market take
             # for ask, amt in list(order_depth.sell_orders.items()):
             #     ask_amt = abs(amt)
@@ -489,16 +495,20 @@ class Trader:
             #     if ask_limit > 0 and int(ask) <= bs - open_spread:
             #         orders.append(Order("COCONUT_COUPON", ask, min(ask_amt, ask_limit)))
             #         ask_limit -= min(ask_amt, ask_limit)
-            #     elif ask_limit > 0 and curr_pos < 0 and int(ask) <= bs + close_spread:
+            #     elif ask_limit > 0 and curr_pos < 0 and int(ask) <= bs + close_spread and roc < 0:
             #         orders.append(Order("COCONUT_COUPON", ask, min(ask_amt, min(ask_limit, abs(curr_pos)))))
             #         ask_limit -= min(ask_amt, min(ask_limit, abs(curr_pos)))
 
             # market make
-            if ask_limit > 0:
-                orders.append(Order("COCONUT_COUPON", min(bs - open_spread, lowest_bid + 1), ask_limit))
+        # if curr_pos > 0 and roc < -0.1:
+        #     orders.append(Order("COCONUT_COUPON", min(bs, lowest_bid + 1), abs(curr_pos)))
+        #     ask_limit -= abs(curr_pos)
+
+        if ask_limit > 0:
+            orders.append(Order("COCONUT_COUPON", min(bs - open_spread, lowest_bid + 1), ask_limit))
 
         # selling logic
-        if len(order_depth.buy_orders) != 0:
+        # if len(order_depth.buy_orders) != 0:
             # market take
             # for bid, amt in list(order_depth.buy_orders.items()):
             #     bid_amt = abs(amt)
@@ -506,13 +516,17 @@ class Trader:
             #     if bid_limit > 0 and int(bid) >= bs + open_spread:
             #         orders.append(Order("COCONUT_COUPON", bid, -min(bid_amt, bid_limit)))
             #         bid_limit -= min(bid_amt, bid_limit)
-            #     elif bid_limit > 0 and curr_pos > 0 and int(bid) >= bs - close_spread:
+            #     elif bid_limit > 0 and curr_pos > 0 and int(bid) >= bs - close_spread and roc > 0:
             #         orders.append(Order("COCONUT_COUPON", bid, -min(bid_amt, min(bid_limit, abs(curr_pos)))))
             #         bid_limit -= min(bid_amt, min(bid_limit, abs(curr_pos)))
 
             # market make
-            if bid_limit > 0:
-                orders.append(Order("COCONUT_COUPON", max(bs + open_spread, highest_ask - 1), -bid_limit))
+        # if curr_pos < 0 and roc > 0.1:
+        #     orders.append(Order("COCONUT_COUPON", max(bs, highest_ask - 1), -abs(curr_pos)))
+        #     bid_limit -= abs(curr_pos)
+
+        if bid_limit > 0:
+            orders.append(Order("COCONUT_COUPON", max(bs + open_spread, highest_ask - 1), -bid_limit))
 
         # # buying logic
         # if ask_limit > 0:
@@ -550,6 +564,9 @@ class Trader:
             if product not in price_history:
                 price_history[product] = []
 
+            if product == "COCONUT_COUPON" and "BS" not in price_history:
+                price_history["BS"] = []
+
             med_bid = np.median([p for p, v in list(order_depth.buy_orders.items()) for _ in range(abs(v))])
             med_ask = np.median([p for p, v in list(order_depth.sell_orders.items()) for _ in range(abs(v))])
 
@@ -569,6 +586,9 @@ class Trader:
             # remove the oldest price history
             while len(price_history[product]) > self.MAX_HISTORY_LENGTH[product]:
                 price_history[product].pop(0)
+
+                if product == "COCONUT_COUPON" and len(price_history["BS"]) > 0:
+                    price_history["BS"].pop(0)
 
         # calculate orders for each product
         orders = {}
