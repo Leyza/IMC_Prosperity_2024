@@ -493,46 +493,18 @@ class Trader:
         roc_bs = self.roc(price_history["BS"], 30) if "BS" in price_history else 0
 
         # buying logic
-        # if len(order_depth.sell_orders) != 0:
-            # market take
-            # for ask, amt in list(order_depth.sell_orders.items()):
-            #     ask_amt = abs(amt)
-            #
-            #     if ask_limit > 0 and int(ask) <= bs - open_spread:
-            #         orders.append(Order("COCONUT_COUPON", ask, min(ask_amt, ask_limit)))
-            #         ask_limit -= min(ask_amt, ask_limit)
-            #     elif ask_limit > 0 and curr_pos < 0 and int(ask) <= bs + close_spread and roc < 0:
-            #         orders.append(Order("COCONUT_COUPON", ask, min(ask_amt, min(ask_limit, abs(curr_pos)))))
-            #         ask_limit -= min(ask_amt, min(ask_limit, abs(curr_pos)))
+        # if curr_pos < 0:
+        #     orders.append(Order("COCONUT_COUPON", min(bs + close_spread, lowest_bid + 1), min(abs(curr_pos), ask_limit)))
+        #     ask_limit -= min(abs(curr_pos), ask_limit)
 
-            # market make
-        # if curr_pos > 0 and roc < -0.1:
-        #     orders.append(Order("COCONUT_COUPON", min(bs, lowest_bid + 1), abs(curr_pos)))
-        #     ask_limit -= abs(curr_pos)
-
-        if ask_limit > 0:
-            orders.append(Order("COCONUT_COUPON", min(bs - open_spread, lowest_bid + 1), ask_limit))
+        orders.append(Order("COCONUT_COUPON", min(bs - open_spread, lowest_bid + 1), ask_limit))
 
         # selling logic
-        # if len(order_depth.buy_orders) != 0:
-            # market take
-            # for bid, amt in list(order_depth.buy_orders.items()):
-            #     bid_amt = abs(amt)
-            #
-            #     if bid_limit > 0 and int(bid) >= bs + open_spread:
-            #         orders.append(Order("COCONUT_COUPON", bid, -min(bid_amt, bid_limit)))
-            #         bid_limit -= min(bid_amt, bid_limit)
-            #     elif bid_limit > 0 and curr_pos > 0 and int(bid) >= bs - close_spread and roc > 0:
-            #         orders.append(Order("COCONUT_COUPON", bid, -min(bid_amt, min(bid_limit, abs(curr_pos)))))
-            #         bid_limit -= min(bid_amt, min(bid_limit, abs(curr_pos)))
+        # if curr_pos > 0:
+        #     orders.append(Order("COCONUT_COUPON", max(bs - close_spread, highest_ask - 1), -min(abs(curr_pos), bid_limit)))
+        #     bid_limit -= min(abs(curr_pos), bid_limit)
 
-            # market make
-        # if curr_pos < 0 and roc > 0.1:
-        #     orders.append(Order("COCONUT_COUPON", max(bs, highest_ask - 1), -abs(curr_pos)))
-        #     bid_limit -= abs(curr_pos)
-
-        if bid_limit > 0:
-            orders.append(Order("COCONUT_COUPON", max(bs + open_spread, highest_ask - 1), -bid_limit))
+        orders.append(Order("COCONUT_COUPON", max(bs + open_spread, highest_ask - 1), -bid_limit))
 
         return orders
 
@@ -588,8 +560,8 @@ class Trader:
                 res = self.amethyst_algo(state, order_depth)
             elif product == "STARFRUIT":
                 res = self.starfruit_algo(state, order_depth, price_history)
-            # elif product == "ORCHIDS":
-            #     res, conv = self.orchids_algo(state, order_depth)
+            elif product == "ORCHIDS":
+                res, conv = self.orchids_algo(state, order_depth)
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
             elif product == "COCONUT_COUPON":
