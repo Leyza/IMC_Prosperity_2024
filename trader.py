@@ -512,7 +512,7 @@ class Trader:
         coupon_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
         curr_pos = state.position["COCONUT"] if "COCONUT" in state.position else 0
 
-        target_pos = -(coupon_pos // 3)
+        target_pos = -(coupon_pos // 2)
         target_amt = -(curr_pos - target_pos)
 
         ask_limit = self.POSITION_LIMITS["COCONUT"] - curr_pos
