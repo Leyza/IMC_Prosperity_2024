@@ -421,15 +421,8 @@ class Trader:
     def gift_basket_algo(self, state, order_depth, price_history):
         orders: List[Order] = []
 
-        if "GIFT_BASKET" in price_history and len(price_history["GIFT_BASKET"]) > 10:
-            mean = self.sma_old(price_history["GIFT_BASKET"], 10000, state.timestamp)
-            v = self.volatility_old(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
-
-            open_spread = int(round(v * 2.02 + 24))
-            close_spread = int(round(v * 0.1)) - 5
-        else:
-            open_spread = 85
-            close_spread = -5
+        open_spread = 90
+        close_spread = -5
 
         choco_orders = state.order_depths["CHOCOLATE"]
         straw_orders = state.order_depths["STRAWBERRIES"]
@@ -541,26 +534,6 @@ class Trader:
         if bid_limit > 0:
             orders.append(Order("COCONUT_COUPON", max(bs + open_spread, highest_ask - 1), -bid_limit))
 
-        # # buying logic
-        # if ask_limit > 0:
-        #     # close short positions
-        #     if curr_pos < 0:
-        #         orders.append(
-        #             Order("COCONUT_COUPON", math.ceil(bs) + close_spread, min(abs(curr_pos), ask_limit)))
-        #         ask_limit -= min(abs(curr_pos), ask_limit)
-        #
-        #     orders.append(Order("COCONUT_COUPON", math.floor(bs) - open_spread, ask_limit))
-        #
-        # # selling logic
-        # if bid_limit > 0:
-        #     # close long positions
-        #     if curr_pos > 0:
-        #         orders.append(
-        #             Order("COCONUT_COUPON", math.floor(bs) - close_spread, -min(abs(curr_pos), bid_limit)))
-        #         bid_limit -= min(abs(curr_pos), bid_limit)
-        #
-        #     orders.append(Order("COCONUT_COUPON", math.ceil(bs) + open_spread, -bid_limit))
-
         return orders
 
     def run(self, state: TradingState):
@@ -615,9 +588,8 @@ class Trader:
                 res = self.amethyst_algo(state, order_depth)
             elif product == "STARFRUIT":
                 res = self.starfruit_algo(state, order_depth, price_history)
-            elif product == "ORCHIDS":
-                # res, conv = self.orchids_algo(state, order_depth)
-                pass
+            # elif product == "ORCHIDS":
+            #     res, conv = self.orchids_algo(state, order_depth)
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
             elif product == "COCONUT_COUPON":
