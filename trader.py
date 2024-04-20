@@ -97,7 +97,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60, "COCONUT": 300, "COCONUT_COUPON": 600}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 101, "COCONUT_COUPON": 101}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 0, "COCONUT_COUPON": 0}
     TIMESTAMP_INTERVAL = 100
 
     def sma_old(self, price_history, history_length, curr_timestamp):
@@ -421,7 +421,7 @@ class Trader:
     def gift_basket_algo(self, state, order_depth, price_history):
         orders: List[Order] = []
 
-        open_spread = 90
+        open_spread = 95
         close_spread = -5
 
         choco_orders = state.order_depths["CHOCOLATE"]
@@ -466,21 +466,22 @@ class Trader:
         K = 10000
         std = 0.00010293960957374845
         r = 0
-        dt = 250 * 10000
+        dt = 247 * 10000
 
         co_orders = state.order_depths["COCONUT"]
         co_price = (list(co_orders.buy_orders.items())[0][0] + list(co_orders.sell_orders.items())[0][0]) / 2
 
         roc = self.roc(price_history["COCONUT_COUPON"], 50) if "COCONUT_COUPON" in price_history else 0
 
-        bs = int(round(self.black_scholes(co_price, K, std, r, dt))) - 14
+        bs = int(round(self.black_scholes(co_price, K, std, r, dt))) - 10
         price_history["BS"].append({
             "timestamp": state.timestamp,
             "price": bs
         })
 
-        open_spread = 5
-        # close_spread = -5
+        open_spread_buy = 20
+        open_spread_sell = 17
+        close_spread = -5
 
         curr_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
         ask_limit = self.POSITION_LIMITS["COCONUT_COUPON"] - curr_pos
@@ -489,22 +490,41 @@ class Trader:
         best_ask = list(order_depth.sell_orders.items())[0][0] if len(order_depth.sell_orders) > 0 else float('inf')
         best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
 
-        roc = self.roc(price_history["COCONUT_COUPON"], 30) if "COCONUT_COUPON" in price_history else 0
-        roc_bs = self.roc(price_history["BS"], 30) if "BS" in price_history else 0
-
         # buying logic
-        # if curr_pos < 0:
-        #     orders.append(Order("COCONUT_COUPON", min(bs + close_spread, lowest_bid + 1), min(abs(curr_pos), ask_limit)))
-        #     ask_limit -= min(abs(curr_pos), ask_limit)
+        if curr_pos < 0:
+            orders.append(Order("COCONUT_COUPON", min(bs + close_spread, best_bid + 1), min(abs(curr_pos), ask_limit)))
+            ask_limit -= min(abs(curr_pos), ask_limit)
 
-        orders.append(Order("COCONUT_COUPON", min(bs - open_spread, best_bid + 1), ask_limit))
+        orders.append(Order("COCONUT_COUPON", min(bs - open_spread_buy, best_bid + 1), ask_limit))
 
         # selling logic
-        # if curr_pos > 0:
-        #     orders.append(Order("COCONUT_COUPON", max(bs - close_spread, highest_ask - 1), -min(abs(curr_pos), bid_limit)))
-        #     bid_limit -= min(abs(curr_pos), bid_limit)
+        if curr_pos > 0:
+            orders.append(Order("COCONUT_COUPON", max(bs - close_spread, best_ask - 1), -min(abs(curr_pos), bid_limit)))
+            bid_limit -= min(abs(curr_pos), bid_limit)
 
-        orders.append(Order("COCONUT_COUPON", max(bs + open_spread, best_ask - 1), -bid_limit))
+        orders.append(Order("COCONUT_COUPON", max(bs + open_spread_sell, best_ask - 1), -bid_limit))
+
+        return orders
+
+    def coconut_coupon_hedge_algo(self, state, order_depth):
+        orders: List[Order] = []
+
+        coupon_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
+        curr_pos = state.position["COCONUT"] if "COCONUT" in state.position else 0
+
+        target_pos = -(coupon_pos // 3)
+        target_amt = -(curr_pos - target_pos)
+
+        ask_limit = self.POSITION_LIMITS["COCONUT"] - curr_pos
+        bid_limit = self.POSITION_LIMITS["COCONUT"] + curr_pos
+
+        best_ask = list(order_depth.sell_orders.items())[0][0] if len(order_depth.sell_orders) > 0 else float('inf')
+        best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
+
+        if target_amt > 0:
+            orders.append(Order("COCONUT", best_ask, min(target_amt, ask_limit)))
+        elif target_amt < 0:
+            orders.append(Order("COCONUT", best_bid, -min(bid_limit, abs(target_amt))))
 
         return orders
 
@@ -565,7 +585,7 @@ class Trader:
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
             elif product == "COCONUT":
-                pass
+                res = self.coconut_coupon_hedge_algo(state, order_depth)
             elif product == "COCONUT_COUPON":
                 res = self.coconut_coupon_algo(state, order_depth, price_history)
 
