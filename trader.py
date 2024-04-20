@@ -100,16 +100,12 @@ class Trader:
     MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 0, "COCONUT_COUPON": 101}
     TIMESTAMP_INTERVAL = 100
 
-    def sma(self, price_history, history_length, curr_timestamp, pad_beginning=False, initial_avg=0):
+    def sma_old(self, price_history, history_length, curr_timestamp):
         """
         Calculate the simple moving average on the price history.
         """
         total = 0
         count = 0
-
-        if pad_beginning and len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
-            count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
-            total = initial_avg * count
 
         for trade in price_history:
             if trade["timestamp"] < curr_timestamp - history_length:
@@ -119,44 +115,13 @@ class Trader:
             count += 1
 
         return total / count
-    
-    def ema(self, price_history, history_length, curr_timestamp):
-        """
-        Calculate the exponential moving average on the price history.
-        """
-        total = 0
-        count = 0
 
-        for trade in price_history:
-            if trade["timestamp"] < curr_timestamp - history_length:
-                continue
-
-            count += 1
-            k = 2 / (count + 1)
-            total = trade["price"] * k + total * (1 - k)
-
-        return total
-
-    def macd(self, price_history, short_length, long_length, curr_timestamp, sma=True):
-        if sma:
-            short = self.sma(price_history, short_length, curr_timestamp)
-            long = self.sma(price_history, long_length, curr_timestamp)
-        else:
-            short = self.ema(price_history, short_length, curr_timestamp)
-            long = self.ema(price_history, long_length, curr_timestamp)
-
-        return short - long
-
-    def volatility(self, price_history, history_length, curr_timestamp, mean, pad_beginning=False, initial_sqr_residual=0.0):
+    def volatility_old(self, price_history, history_length, curr_timestamp, mean):
         """
         Calculate the historical price volatility.
         """
         total = 0
         count = 0
-
-        if pad_beginning and len(price_history) > 0 and price_history[0]["timestamp"] > curr_timestamp - history_length:
-            count = (price_history[0]["timestamp"] - curr_timestamp + history_length) / self.TIMESTAMP_INTERVAL
-            total = initial_sqr_residual * count
 
         for trade in price_history:
             if trade["timestamp"] < curr_timestamp - history_length:
@@ -166,6 +131,54 @@ class Trader:
             count += 1
 
         return np.sqrt(total / count)
+
+    def sma(self, price_history, length):
+        """
+        Calculate the simple moving average on the price history.
+        """
+        total = 0
+        count = 0
+
+        for trade in price_history[-length - 1:]:
+            total += trade["price"]
+            count += 1
+
+        return total / count if count > 0 else 0
+    
+    def ema(self, price_history, length):
+        """
+        Calculate the exponential moving average on the price history.
+        """
+        total = 0
+        count = 0
+
+        for trade in price_history[-length - 1:]:
+            count += 1
+            k = 2 / (count + 1)
+            total = trade["price"] * k + total * (1 - k)
+
+        return total
+
+    def macd(self, price_history, short_length, long_length, sma=True):
+        if sma:
+            short = self.sma(price_history, short_length)
+            long = self.sma(price_history, long_length)
+        else:
+            short = self.ema(price_history, short_length)
+            long = self.ema(price_history, long_length)
+
+        return short - long
+
+    def volatility(self, price_history, length):
+        """
+        Calculate the historical price volatility.
+        """
+        returns = []
+
+        for i in range(max(1, len(price_history) - length), len(price_history)):
+            returns.append((price_history[i]["price"] / price_history[i - 1]["price"] - 1) * 100)
+
+        return np.std(returns)
 
     def roc(self, price_history, distance=1):
         """
@@ -409,8 +422,8 @@ class Trader:
         orders: List[Order] = []
 
         if "GIFT_BASKET" in price_history and len(price_history["GIFT_BASKET"]) > 10:
-            mean = self.sma(price_history["GIFT_BASKET"], 10000, state.timestamp)
-            v = self.volatility(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
+            mean = self.sma_old(price_history["GIFT_BASKET"], 10000, state.timestamp)
+            v = self.volatility_old(price_history["GIFT_BASKET"], 10000, state.timestamp, mean)
 
             open_spread = int(round(v * 2.02 + 24))
             close_spread = int(round(v * 0.1)) - 5
@@ -603,7 +616,8 @@ class Trader:
             elif product == "STARFRUIT":
                 res = self.starfruit_algo(state, order_depth, price_history)
             elif product == "ORCHIDS":
-                res, conv = self.orchids_algo(state, order_depth)
+                # res, conv = self.orchids_algo(state, order_depth)
+                pass
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
             elif product == "COCONUT_COUPON":
