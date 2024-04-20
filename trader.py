@@ -97,7 +97,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60, "COCONUT": 300, "COCONUT_COUPON": 600}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 0, "COCONUT_COUPON": 101}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 101, "COCONUT_COUPON": 101}
     TIMESTAMP_INTERVAL = 100
 
     def sma_old(self, price_history, history_length, curr_timestamp):
@@ -486,8 +486,8 @@ class Trader:
         ask_limit = self.POSITION_LIMITS["COCONUT_COUPON"] - curr_pos
         bid_limit = self.POSITION_LIMITS["COCONUT_COUPON"] + curr_pos
 
-        highest_ask = list(order_depth.sell_orders.items())[-1][0] if len(order_depth.sell_orders) > 0 else float('inf')
-        lowest_bid = list(order_depth.buy_orders.items())[-1][0] if len(order_depth.buy_orders) > 0 else 0
+        best_ask = list(order_depth.sell_orders.items())[0][0] if len(order_depth.sell_orders) > 0 else float('inf')
+        best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
 
         roc = self.roc(price_history["COCONUT_COUPON"], 30) if "COCONUT_COUPON" in price_history else 0
         roc_bs = self.roc(price_history["BS"], 30) if "BS" in price_history else 0
@@ -497,14 +497,14 @@ class Trader:
         #     orders.append(Order("COCONUT_COUPON", min(bs + close_spread, lowest_bid + 1), min(abs(curr_pos), ask_limit)))
         #     ask_limit -= min(abs(curr_pos), ask_limit)
 
-        orders.append(Order("COCONUT_COUPON", min(bs - open_spread, lowest_bid + 1), ask_limit))
+        orders.append(Order("COCONUT_COUPON", min(bs - open_spread, best_bid + 1), ask_limit))
 
         # selling logic
         # if curr_pos > 0:
         #     orders.append(Order("COCONUT_COUPON", max(bs - close_spread, highest_ask - 1), -min(abs(curr_pos), bid_limit)))
         #     bid_limit -= min(abs(curr_pos), bid_limit)
 
-        orders.append(Order("COCONUT_COUPON", max(bs + open_spread, highest_ask - 1), -bid_limit))
+        orders.append(Order("COCONUT_COUPON", max(bs + open_spread, best_ask - 1), -bid_limit))
 
         return orders
 
@@ -564,6 +564,8 @@ class Trader:
                 res, conv = self.orchids_algo(state, order_depth)
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
+            elif product == "COCONUT":
+                pass
             elif product == "COCONUT_COUPON":
                 res = self.coconut_coupon_algo(state, order_depth, price_history)
 
