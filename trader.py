@@ -97,7 +97,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60, "COCONUT": 300, "COCONUT_COUPON": 600}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 0, "COCONUT_COUPON": 0}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 100, "COCONUT_COUPON": 0}
     TIMESTAMP_INTERVAL = 100
 
     def sma_old(self, price_history, history_length, curr_timestamp):
@@ -175,8 +175,8 @@ class Trader:
         """
         returns = []
 
-        for i in range(max(1, len(price_history) - length), len(price_history)):
-            returns.append((price_history[i]["price"] / price_history[i - 1]["price"] - 1) * 100)
+        for i in range(max(1, len(price_history) - length + 1), len(price_history)):
+            returns.append(np.log(price_history[i]["price"] / price_history[i - 1]["price"]))
 
         return np.std(returns)
 
@@ -240,6 +240,10 @@ class Trader:
         call_price = self.phi(d_plus) * price - self.phi(d_minus) * K * exp(-r * dt)
 
         return call_price
+
+    def delta(self, price, K, std, r, dt):
+        d_plus = (np.log(price / K) + dt * (r + std ** 2 / 2)) / (sqrt(dt) * std)
+        return self.phi(d_plus)
 
     def get_own_trades_quant(self, state, product, price, is_buy=False, greater=False):
         quantity = 0
@@ -471,13 +475,7 @@ class Trader:
         co_orders = state.order_depths["COCONUT"]
         co_price = (list(co_orders.buy_orders.items())[0][0] + list(co_orders.sell_orders.items())[0][0]) / 2
 
-        roc = self.roc(price_history["COCONUT_COUPON"], 50) if "COCONUT_COUPON" in price_history else 0
-
         bs = int(round(self.black_scholes(co_price, K, std, r, dt))) - 10
-        price_history["BS"].append({
-            "timestamp": state.timestamp,
-            "price": bs
-        })
 
         open_spread_buy = 20
         open_spread_sell = 17
@@ -504,15 +502,23 @@ class Trader:
 
         orders.append(Order("COCONUT_COUPON", max(bs + open_spread_sell, best_ask - 1), -bid_limit))
 
+        logger.print(f"coupon call price is {bs}")
         return orders
 
-    def coconut_coupon_hedge_algo(self, state, order_depth):
+    def coconut_algo(self, state, order_depth, price_history):
         orders: List[Order] = []
+
+        K = 10000
+        std = 0.00010293960957374845
+        r = 0
+        dt = 247 * 10000
+        price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
+        delta = self.delta(price, K, std, r, dt)
 
         coupon_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
         curr_pos = state.position["COCONUT"] if "COCONUT" in state.position else 0
 
-        target_pos = -(coupon_pos // 2)
+        target_pos = -int(round((coupon_pos * delta)))
         target_amt = -(curr_pos - target_pos)
 
         ask_limit = self.POSITION_LIMITS["COCONUT"] - curr_pos
@@ -526,12 +532,13 @@ class Trader:
         elif target_amt < 0:
             orders.append(Order("COCONUT", best_bid, -min(bid_limit, abs(target_amt))))
 
+        logger.print(f"coupons delta is {delta}.")
         return orders
 
     def run(self, state: TradingState):
 
         if state.traderData == "":
-            price_history = {"AMETHYSTS": [], "STARFRUIT": []}
+            price_history = {}
         else:
             price_history = json.loads(state.traderData)
 
@@ -541,9 +548,6 @@ class Trader:
 
             if product not in price_history:
                 price_history[product] = []
-
-            if product == "COCONUT_COUPON" and "BS" not in price_history:
-                price_history["BS"] = []
 
             med_bid = np.median([p for p, v in list(order_depth.buy_orders.items()) for _ in range(abs(v))])
             med_ask = np.median([p for p, v in list(order_depth.sell_orders.items()) for _ in range(abs(v))])
@@ -565,9 +569,6 @@ class Trader:
             while len(price_history[product]) > self.MAX_HISTORY_LENGTH[product]:
                 price_history[product].pop(0)
 
-                if product == "COCONUT_COUPON" and len(price_history["BS"]) > 0:
-                    price_history["BS"].pop(0)
-
         # calculate orders for each product
         orders = {}
         conversions = 0
@@ -585,7 +586,7 @@ class Trader:
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
             elif product == "COCONUT":
-                res = self.coconut_coupon_hedge_algo(state, order_depth)
+                res = self.coconut_algo(state, order_depth, price_history)
             elif product == "COCONUT_COUPON":
                 res = self.coconut_coupon_algo(state, order_depth, price_history)
 
