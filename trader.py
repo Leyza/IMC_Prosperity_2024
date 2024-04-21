@@ -443,23 +443,26 @@ class Trader:
         ask_limit = self.POSITION_LIMITS["GIFT_BASKET"] - curr_pos
         bid_limit = self.POSITION_LIMITS["GIFT_BASKET"] + curr_pos
 
+        best_ask = list(order_depth.sell_orders.items())[0][0] if len(order_depth.sell_orders) > 0 else float('inf')
+        best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
+
         # buying logic
         if ask_limit > 0:
             # close short positions
             if curr_pos < 0:
-                orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + close_spread, min(abs(curr_pos), ask_limit)))
+                orders.append(Order("GIFT_BASKET", min(math.ceil(combined_price) + close_spread, best_ask), min(abs(curr_pos), ask_limit)))
                 ask_limit -= min(abs(curr_pos), ask_limit)
 
-            orders.append(Order("GIFT_BASKET", math.floor(combined_price) - open_spread, ask_limit))
+            orders.append(Order("GIFT_BASKET", min(math.floor(combined_price) - open_spread, best_ask), ask_limit))
 
         # selling logic
         if bid_limit > 0:
             # close long positions
             if curr_pos > 0:
-                orders.append(Order("GIFT_BASKET", math.floor(combined_price) - close_spread, -min(abs(curr_pos), bid_limit)))
+                orders.append(Order("GIFT_BASKET", max(math.floor(combined_price) - close_spread, best_bid), -min(abs(curr_pos), bid_limit)))
                 bid_limit -= min(abs(curr_pos), bid_limit)
 
-            orders.append(Order("GIFT_BASKET", math.ceil(combined_price) + open_spread, -bid_limit))
+            orders.append(Order("GIFT_BASKET", max(math.ceil(combined_price) + open_spread, best_bid), -bid_limit))
 
         logger.print(f"Gift basket combined price {combined_price} | current price {gift_price} | open spread: {open_spread} | close spread: {close_spread}")
         return orders
