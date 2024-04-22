@@ -406,7 +406,7 @@ class Trader:
         straw_price = (list(straw_orders.buy_orders.items())[0][0] + list(straw_orders.sell_orders.items())[0][0]) / 2
         rose_price = (list(rose_orders.buy_orders.items())[0][0] + list(rose_orders.sell_orders.items())[0][0]) / 2
 
-        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 359
+        combined_price = 4 * choco_price + 6 * straw_price + rose_price + 360
         gift_price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
 
         curr_pos = state.position["GIFT_BASKET"] if "GIFT_BASKET" in state.position else 0
