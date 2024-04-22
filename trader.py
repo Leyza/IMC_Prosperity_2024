@@ -116,7 +116,7 @@ class Trader:
         total = 0
         count = 0
 
-        for price in price_history[-length - 1:]:
+        for price in price_history[-length:]:
             count += 1
             k = 2 / (count + 1)
             total = price * k + total * (1 - k)
@@ -137,7 +137,7 @@ class Trader:
         """
         Calculate the historical price volatility.
         """
-        prices = pd.Series(price_history[-length])
+        prices = pd.Series(price_history[-length:])
 
         return prices.std()
 
