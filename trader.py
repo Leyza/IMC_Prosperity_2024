@@ -511,9 +511,9 @@ class Trader:
         orders: List[Order] = []
 
         K = 10000
-        std = 0.00010293960957374845
+        std = 0.00010139628800170941
         r = 0
-        dt = 247 * 10000
+        dt = 247 * 10000 - (state.timestamp // 100)
         price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
         delta = self.delta(price, K, std, r, dt)
 
