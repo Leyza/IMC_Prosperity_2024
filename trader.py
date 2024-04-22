@@ -2,6 +2,7 @@ from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder
 from typing import List, Any
 import string
 import numpy as np
+import pandas as pd
 import jsonpickle as js
 import json
 import math
@@ -100,50 +101,13 @@ class Trader:
     MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 100, "COCONUT_COUPON": 101}
     TIMESTAMP_INTERVAL = 100
 
-    def sma_old(self, price_history, history_length, curr_timestamp):
-        """
-        Calculate the simple moving average on the price history.
-        """
-        total = 0
-        count = 0
-
-        for trade in price_history:
-            if trade["timestamp"] < curr_timestamp - history_length:
-                continue
-
-            total += trade["price"]
-            count += 1
-
-        return total / count
-
-    def volatility_old(self, price_history, history_length, curr_timestamp, mean):
-        """
-        Calculate the historical price volatility.
-        """
-        total = 0
-        count = 0
-
-        for trade in price_history:
-            if trade["timestamp"] < curr_timestamp - history_length:
-                continue
-
-            total += (trade["price"] - mean) ** 2
-            count += 1
-
-        return np.sqrt(total / count)
-
     def sma(self, price_history, length):
         """
         Calculate the simple moving average on the price history.
         """
-        total = 0
-        count = 0
+        prices = pd.Series(price_history[-length:])
 
-        for trade in price_history[-length - 1:]:
-            total += trade["price"]
-            count += 1
-
-        return total / count if count > 0 else 0
+        return prices.mean()
     
     def ema(self, price_history, length):
         """
@@ -152,10 +116,10 @@ class Trader:
         total = 0
         count = 0
 
-        for trade in price_history[-length - 1:]:
+        for price in price_history[-length - 1:]:
             count += 1
             k = 2 / (count + 1)
-            total = trade["price"] * k + total * (1 - k)
+            total = price * k + total * (1 - k)
 
         return total
 
@@ -169,25 +133,31 @@ class Trader:
 
         return short - long
 
-    def volatility(self, price_history, length):
+    def price_volatility(self, price_history, length):
         """
         Calculate the historical price volatility.
         """
-        returns = []
+        prices = pd.Series(price_history[-length])
 
-        for i in range(max(1, len(price_history) - length + 1), len(price_history)):
-            returns.append(np.log(price_history[i]["price"] / price_history[i - 1]["price"]))
+        return prices.std()
+
+    def returns_volatility(self, price_history, length):
+        """
+        Calculate the historical returns volatility.
+        """
+        prices = pd.Series(price_history[-length:])
+        returns = np.log(prices[1:] / prices[:-1])
 
         return np.std(returns)
 
     def roc(self, price_history, distance=1):
         """
-        Price rate of change.
+        Price rate of change in %.
         """
         if len(price_history) < distance + 1:
             return 0
 
-        return (price_history[-1]["price"] - price_history[-1 - distance]["price"]) / price_history[-1 - distance]["price"] * 100
+        return (price_history[-1] - price_history[-1 - distance]) / price_history[-1 - distance] * 100
 
     def lin_regression(self, train_x, train_y):
         """
@@ -205,7 +175,7 @@ class Trader:
 
         past_vals = []
         for i in range(len(price_history)):
-            past_vals.append(price_history[i]['price'])
+            past_vals.append(price_history[i])
 
             if i >= num_vars:
                 for j in range(num_vars):
@@ -227,7 +197,7 @@ class Trader:
 
         pred = intercept
         for i, x in enumerate(price_history[-len(coef):]):
-            pred += x["price"] * coef[i]
+            pred += x * coef[i]
         return pred
 
     def phi(self, x):
@@ -562,10 +532,7 @@ class Trader:
                 else:
                     mid_price = med_ask
 
-                price_history[product].append({
-                    "timestamp": state.timestamp,
-                    "price": mid_price,
-                })
+                price_history[product].append(mid_price)
 
             # remove the oldest price history
             while len(price_history[product]) > self.MAX_HISTORY_LENGTH[product]:
