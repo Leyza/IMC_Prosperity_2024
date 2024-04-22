@@ -97,7 +97,7 @@ logger = Logger()
 
 class Trader:
     POSITION_LIMITS = {"AMETHYSTS": 20, "STARFRUIT": 20, "ORCHIDS": 100, "CHOCOLATE": 250, "STRAWBERRIES": 350, "ROSES": 60, "GIFT_BASKET": 60, "COCONUT": 300, "COCONUT_COUPON": 600}
-    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 100, "COCONUT_COUPON": 0}
+    MAX_HISTORY_LENGTH = {"AMETHYSTS": 0, "STARFRUIT": 50, "ORCHIDS": 0,  "CHOCOLATE": 0, "STRAWBERRIES": 0, "ROSES": 0, "GIFT_BASKET": 101, "COCONUT": 100, "COCONUT_COUPON": 101}
     TIMESTAMP_INTERVAL = 100
 
     def sma_old(self, price_history, history_length, curr_timestamp):
@@ -471,17 +471,16 @@ class Trader:
         orders: List[Order] = []
 
         K = 10000
-        std = 0.00010293960957374845
+        std = 0.00010139628800170941
         r = 0
-        dt = 247 * 10000
+        dt = 247 * 10000 - (state.timestamp // 100)
 
         co_orders = state.order_depths["COCONUT"]
         co_price = (list(co_orders.buy_orders.items())[0][0] + list(co_orders.sell_orders.items())[0][0]) / 2
 
-        bs = int(round(self.black_scholes(co_price, K, std, r, dt))) - 10
+        bs = int(round(self.black_scholes(co_price, K, std, r, dt)))
 
-        open_spread_buy = 20
-        open_spread_sell = 17
+        open_spread = 15
         close_spread = -5
 
         curr_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
@@ -496,14 +495,14 @@ class Trader:
             orders.append(Order("COCONUT_COUPON", min(bs + close_spread, best_bid + 1), min(abs(curr_pos), ask_limit)))
             ask_limit -= min(abs(curr_pos), ask_limit)
 
-        orders.append(Order("COCONUT_COUPON", min(bs - open_spread_buy, best_bid + 1), ask_limit))
+        orders.append(Order("COCONUT_COUPON", min(bs - open_spread, best_bid + 1), ask_limit))
 
         # selling logic
         if curr_pos > 0:
             orders.append(Order("COCONUT_COUPON", max(bs - close_spread, best_ask - 1), -min(abs(curr_pos), bid_limit)))
             bid_limit -= min(abs(curr_pos), bid_limit)
 
-        orders.append(Order("COCONUT_COUPON", max(bs + open_spread_sell, best_ask - 1), -bid_limit))
+        orders.append(Order("COCONUT_COUPON", max(bs + open_spread, best_ask - 1), -bid_limit))
 
         logger.print(f"coupon call price is {bs}")
         return orders
