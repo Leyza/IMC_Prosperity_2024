@@ -1,6 +1,5 @@
 from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
 from typing import List, Any
-import string
 import numpy as np
 import pandas as pd
 import jsonpickle as js
@@ -304,10 +303,9 @@ class Trader:
         default_intercept = 5.003692924688039
 
         if "STARFRUIT" not in all_trade_history or len(all_trade_history["STARFRUIT"]) < len(default_coef):
-            return orders
-
+            predicted_price = (list(order_depth.sell_orders.items())[-1][0] + list(order_depth.buy_orders.items())[-1][0]) / 2
         # linear regression to predict next price
-        if len(all_trade_history["STARFRUIT"]) >= num_vars * 2:
+        elif len(all_trade_history["STARFRUIT"]) >= num_vars * 2:
             train_x, train_y = self.preprocess_for_lr(all_trade_history["STARFRUIT"], num_vars)
             coefs, intercept = self.lin_regression(train_x, train_y)
             predicted_price = int(round(self.predict_from_coefs(all_trade_history["STARFRUIT"], coefs, intercept)))
@@ -450,7 +448,7 @@ class Trader:
 
         bs = int(round(self.black_scholes(co_price, K, std, r, dt)))
 
-        open_spread = 15
+        open_spread = 13
         close_spread = -5
 
         curr_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
@@ -508,13 +506,10 @@ class Trader:
         return orders
 
     def run(self, state: TradingState):
+        data = json.loads(state.traderData) if state.traderData != "" else {"price_history": {}, "positions": {}}
 
-        if state.traderData == "":
-            price_history = {}
-        else:
-            price_history = json.loads(state.traderData)
-
-        # update trade history
+        # update price history
+        price_history = data["price_history"]
         for product in state.order_depths:
             order_depth: OrderDepth = state.order_depths[product]
 
@@ -537,6 +532,40 @@ class Trader:
             # remove the oldest price history
             while len(price_history[product]) > self.MAX_HISTORY_LENGTH[product]:
                 price_history[product].pop(0)
+
+        # update positions
+        positions = data["positions"]
+        for product, trades in state.market_trades.items():
+            if product not in positions:
+                positions[product] = {}
+
+            for trade in trades:
+                if trade.timestamp != state.timestamp - 100:
+                    continue
+
+                if trade.buyer not in positions[product]:
+                    positions[product][trade.buyer] = 0
+                if trade.seller not in positions[product]:
+                    positions[product][trade.seller] = 0
+
+                positions[product][trade.buyer] += trade.quantity
+                positions[product][trade.seller] -= trade.quantity
+
+        for product, trades in state.own_trades.items():
+            if product not in positions:
+                positions[product] = {}
+
+            for trade in trades:
+                if trade.timestamp != state.timestamp - 100:
+                    continue
+
+                if trade.buyer not in positions[product]:
+                    positions[product][trade.buyer] = 0
+                if trade.seller not in positions[product]:
+                    positions[product][trade.seller] = 0
+
+                positions[product][trade.buyer] += trade.quantity
+                positions[product][trade.seller] -= trade.quantity
 
         # calculate orders for each product
         orders = {}
@@ -562,7 +591,10 @@ class Trader:
             orders[product] = res
             conversions += conv
 
-        trader_data = json.dumps(price_history)
+        # serialize trader data
+        data["price_history"] = price_history
+        data["positions"] = positions
+        trader_data = json.dumps(data)
 
         logger.flush(state, orders, conversions, "trader_data")
         return orders, conversions, trader_data
