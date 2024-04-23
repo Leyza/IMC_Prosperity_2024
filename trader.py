@@ -393,7 +393,7 @@ class Trader:
     def gift_basket_algo(self, state, order_depth, price_history):
         orders: List[Order] = []
 
-        open_spread = 95
+        open_spread = 90
         close_spread = -5
 
         choco_orders = state.order_depths["CHOCOLATE"]
@@ -448,8 +448,8 @@ class Trader:
 
         bs = int(round(self.black_scholes(co_price, K, std, r, dt)))
 
-        open_spread = 13
-        close_spread = -5
+        open_spread = 7
+        close_spread = -6
 
         curr_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
         ask_limit = self.POSITION_LIMITS["COCONUT_COUPON"] - curr_pos
@@ -583,8 +583,8 @@ class Trader:
                 res, conv = self.orchids_algo(state, order_depth)
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
-            elif product == "COCONUT":
-                res = self.coconut_algo(state, order_depth, price_history)
+            # elif product == "COCONUT":
+            #     res = self.coconut_algo(state, order_depth, price_history)
             elif product == "COCONUT_COUPON":
                 res = self.coconut_coupon_algo(state, order_depth, price_history)
 
