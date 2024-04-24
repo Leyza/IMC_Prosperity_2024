@@ -435,6 +435,25 @@ class Trader:
         logger.print(f"Gift basket combined price {combined_price} | current price {gift_price} | open spread: {open_spread} | close spread: {close_spread}")
         return orders
 
+    def rose_algo(self, state, order_depth):
+        orders: List[Order] = []
+
+        curr_pos = state.position["ROSES"] if "ROSES" in state.position else 0
+        ask_limit = self.POSITION_LIMITS["ROSES"] - curr_pos
+        bid_limit = self.POSITION_LIMITS["ROSES"] + curr_pos
+
+        best_ask = list(order_depth.sell_orders.items())[0][0] if len(order_depth.sell_orders) > 0 else float('inf')
+        best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
+
+        trades = state.market_trades["ROSES"] if "ROSES" in state.market_trades else []
+        for trade in trades:
+            if trade.buyer == "Rhianna":
+                orders.append(Order("ROSES", best_ask, ask_limit))
+            if trade.seller == "Rhianna":
+                orders.append(Order("ROSES", best_bid, -bid_limit))
+
+        return orders
+
     def coconut_coupon_algo(self, state, order_depth, price_history):
         orders: List[Order] = []
 
@@ -583,6 +602,8 @@ class Trader:
                 res, conv = self.orchids_algo(state, order_depth)
             elif product == "GIFT_BASKET":
                 res = self.gift_basket_algo(state, order_depth, price_history)
+            elif product == "ROSES":
+                res = self.rose_algo(state, order_depth)
             # elif product == "COCONUT":
             #     res = self.coconut_algo(state, order_depth, price_history)
             elif product == "COCONUT_COUPON":
