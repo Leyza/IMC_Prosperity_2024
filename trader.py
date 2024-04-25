@@ -452,48 +452,6 @@ class Trader:
 
         return orders
 
-    def test_algo(self, state, product, order_depth):
-        orders: List[Order] = []
-
-        # if list(order_depth.sell_orders.items())[0][0] - list(order_depth.buy_orders.items())[0][0] < 2:
-        #     return orders
-
-        curr_price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
-
-        curr_pos = state.position[product] if product in state.position else 0
-        ask_limit = self.POSITION_LIMITS[product] - curr_pos
-        bid_limit = self.POSITION_LIMITS[product] + curr_pos
-
-        highest_ask = list(order_depth.sell_orders.items())[-1][0] if len(order_depth.sell_orders) > 0 else float('inf')
-        lowest_bid = list(order_depth.buy_orders.items())[-1][0] if len(order_depth.buy_orders) > 0 else 0
-
-        best_ask = list(order_depth.sell_orders.items())[0][0] if len(order_depth.sell_orders) > 0 else float('inf')
-        best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
-
-        highest_ask = list(order_depth.sell_orders.items())[-1][0] if len(order_depth.sell_orders) > 0 else float('inf')
-        lowest_bid = list(order_depth.buy_orders.items())[-1][0] if len(order_depth.buy_orders) > 0 else 0
-
-        ask_vol = sum([abs(order[1]) for order in list(order_depth.sell_orders.items())])
-        bid_vol = sum([abs(order[1]) for order in list(order_depth.buy_orders.items())])
-
-        # if curr_pos < 0:
-        #     orders.append(Order(product, highest_ask + 4, min(ask_limit, ask_vol + 30)))
-        #     orders.append(Order(product, highest_ask + 6, -min(bid_limit, 40)))
-        # else:
-        #     orders.append(Order(product, lowest_bid - 4, -min(bid_limit, bid_vol + 30)))
-        #     orders.append(Order(product, lowest_bid - 6, min(ask_limit, 40)))
-        if curr_pos > 0:
-            orders.append(Order(product, best_ask - 1, -abs(curr_pos)))
-            bid_limit -= abs(curr_pos)
-        elif curr_pos < 0:
-            orders.append(Order(product, best_bid + 1, abs(curr_pos)))
-            ask_limit -= abs(curr_pos)
-
-        orders.append(Order(product, lowest_bid, ask_limit))
-        orders.append(Order(product, highest_ask, -bid_limit))
-
-        return orders
-
     def run(self, state: TradingState):
         data = json.loads(state.traderData) if state.traderData != "" else {"price_history": {}, "positions": {}}
 
@@ -529,7 +487,7 @@ class Trader:
                 positions[product] = {}
 
             for trade in trades:
-                if trade.timestamp != state.timestamp - 100:
+                if trade.timestamp != state.timestamp - self.TIMESTAMP_INTERVAL:
                     continue
 
                 if trade.buyer not in positions[product]:
@@ -545,7 +503,7 @@ class Trader:
                 positions[product] = {}
 
             for trade in trades:
-                if trade.timestamp != state.timestamp - 100:
+                if trade.timestamp != state.timestamp - self.TIMESTAMP_INTERVAL:
                     continue
 
                 if trade.buyer not in positions[product]:
