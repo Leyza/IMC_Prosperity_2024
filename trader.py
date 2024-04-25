@@ -432,18 +432,10 @@ class Trader:
     def coconut_coupon_algo(self, state, order_depth, price_history):
         orders: List[Order] = []
 
-        K = 10000
-        std = 0.00010139628800170941
-        r = 0
-        dt = 246 * 10000 - (state.timestamp // 100)
+        if "COCONUT" not in price_history or len(price_history["COCONUT"]) == 0:
+            return orders
 
-        co_orders = state.order_depths["COCONUT"]
-        co_price = (list(co_orders.buy_orders.items())[0][0] + list(co_orders.sell_orders.items())[0][0]) / 2
-
-        bs = int(round(self.black_scholes(co_price, K, std, r, dt)))
-
-        open_spread = 7
-        close_spread = -6
+        pred_price = 0.5026 * price_history['COCONUT'][-1] - 4390.57
 
         curr_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
         ask_limit = self.POSITION_LIMITS["COCONUT_COUPON"] - curr_pos
@@ -453,20 +445,53 @@ class Trader:
         best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
 
         # buying logic
-        if curr_pos < 0:
-            orders.append(Order("COCONUT_COUPON", min(bs + close_spread, best_bid + 1), min(abs(curr_pos), ask_limit)))
-            ask_limit -= min(abs(curr_pos), ask_limit)
-
-        orders.append(Order("COCONUT_COUPON", min(bs - open_spread, best_bid + 1), ask_limit))
+        orders.append(Order("COCONUT_COUPON", min(math.floor(pred_price) - 1, best_bid + 1), ask_limit))
 
         # selling logic
+        orders.append(Order("COCONUT_COUPON", max(math.ceil(pred_price) + 1, best_ask - 1), -bid_limit))
+
+        return orders
+
+    def test_algo(self, state, product, order_depth):
+        orders: List[Order] = []
+
+        # if list(order_depth.sell_orders.items())[0][0] - list(order_depth.buy_orders.items())[0][0] < 2:
+        #     return orders
+
+        curr_price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
+
+        curr_pos = state.position[product] if product in state.position else 0
+        ask_limit = self.POSITION_LIMITS[product] - curr_pos
+        bid_limit = self.POSITION_LIMITS[product] + curr_pos
+
+        highest_ask = list(order_depth.sell_orders.items())[-1][0] if len(order_depth.sell_orders) > 0 else float('inf')
+        lowest_bid = list(order_depth.buy_orders.items())[-1][0] if len(order_depth.buy_orders) > 0 else 0
+
+        best_ask = list(order_depth.sell_orders.items())[0][0] if len(order_depth.sell_orders) > 0 else float('inf')
+        best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
+
+        highest_ask = list(order_depth.sell_orders.items())[-1][0] if len(order_depth.sell_orders) > 0 else float('inf')
+        lowest_bid = list(order_depth.buy_orders.items())[-1][0] if len(order_depth.buy_orders) > 0 else 0
+
+        ask_vol = sum([abs(order[1]) for order in list(order_depth.sell_orders.items())])
+        bid_vol = sum([abs(order[1]) for order in list(order_depth.buy_orders.items())])
+
+        # if curr_pos < 0:
+        #     orders.append(Order(product, highest_ask + 4, min(ask_limit, ask_vol + 30)))
+        #     orders.append(Order(product, highest_ask + 6, -min(bid_limit, 40)))
+        # else:
+        #     orders.append(Order(product, lowest_bid - 4, -min(bid_limit, bid_vol + 30)))
+        #     orders.append(Order(product, lowest_bid - 6, min(ask_limit, 40)))
         if curr_pos > 0:
-            orders.append(Order("COCONUT_COUPON", max(bs - close_spread, best_ask - 1), -min(abs(curr_pos), bid_limit)))
-            bid_limit -= min(abs(curr_pos), bid_limit)
+            orders.append(Order(product, best_ask - 1, -abs(curr_pos)))
+            bid_limit -= abs(curr_pos)
+        elif curr_pos < 0:
+            orders.append(Order(product, best_bid + 1, abs(curr_pos)))
+            ask_limit -= abs(curr_pos)
 
-        orders.append(Order("COCONUT_COUPON", max(bs + open_spread, best_ask - 1), -bid_limit))
+        orders.append(Order(product, lowest_bid, ask_limit))
+        orders.append(Order(product, highest_ask, -bid_limit))
 
-        logger.print(f"coupon call price is {bs}")
         return orders
 
     def run(self, state: TradingState):
