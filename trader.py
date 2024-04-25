@@ -214,31 +214,6 @@ class Trader:
         d_plus = (np.log(price / K) + dt * (r + std ** 2 / 2)) / (sqrt(dt) * std)
         return self.phi(d_plus)
 
-    def get_own_trades_quant(self, state, product, price, is_buy=False, greater=False):
-        quantity = 0
-        if product not in state.own_trades:
-            return quantity
-
-        for trade in state.own_trades[product]:
-            logger.print(f"price {trade.price} | quant {trade.quantity} | buyer {trade.buyer} | seller {trade.seller}")
-            if is_buy and trade.buyer == "SUBMISSION":
-                if greater and trade.price > price:
-                    logger.print("trade price > given price")
-                    quantity += trade.quantity
-                elif not greater and trade.price < price:
-                    logger.print("trade price < given price")
-                    quantity += trade.quantity
-            elif not is_buy and trade.seller == "SUBMISSION":
-                if greater and trade.price < price:
-                    logger.print("trade price > given price")
-                    quantity += trade.quantity
-                elif not greater and trade.price > price:
-                    logger.print("trade price < given price")
-                    quantity += trade.quantity
-
-        logger.print(f"returned {quantity} quantity")
-        return quantity
-
     def amethyst_algo(self, state, order_depth):
         orders: List[Order] = []
 
@@ -447,9 +422,9 @@ class Trader:
 
         trades = state.market_trades["ROSES"] if "ROSES" in state.market_trades else []
         for trade in trades:
-            if trade.buyer == "Rhianna":
+            if trade.buyer == "Rhianna" and trade.seller != "Rhianna":
                 orders.append(Order("ROSES", best_ask, ask_limit))
-            if trade.seller == "Rhianna":
+            if trade.seller == "Rhianna" and trade.buyer != "Rhianna":
                 orders.append(Order("ROSES", best_bid, -bid_limit))
 
         return orders
@@ -460,7 +435,7 @@ class Trader:
         K = 10000
         std = 0.00010139628800170941
         r = 0
-        dt = 247 * 10000 - (state.timestamp // 100)
+        dt = 246 * 10000 - (state.timestamp // 100)
 
         co_orders = state.order_depths["COCONUT"]
         co_price = (list(co_orders.buy_orders.items())[0][0] + list(co_orders.sell_orders.items())[0][0]) / 2
@@ -492,36 +467,6 @@ class Trader:
         orders.append(Order("COCONUT_COUPON", max(bs + open_spread, best_ask - 1), -bid_limit))
 
         logger.print(f"coupon call price is {bs}")
-        return orders
-
-    def coconut_algo(self, state, order_depth, price_history):
-        orders: List[Order] = []
-
-        K = 10000
-        std = 0.00010139628800170941
-        r = 0
-        dt = 247 * 10000 - (state.timestamp // 100)
-        price = (list(order_depth.buy_orders.items())[0][0] + list(order_depth.sell_orders.items())[0][0]) / 2
-        delta = self.delta(price, K, std, r, dt)
-
-        coupon_pos = state.position["COCONUT_COUPON"] if "COCONUT_COUPON" in state.position else 0
-        curr_pos = state.position["COCONUT"] if "COCONUT" in state.position else 0
-
-        target_pos = -int(round((coupon_pos * delta)))
-        target_amt = -(curr_pos - target_pos)
-
-        ask_limit = self.POSITION_LIMITS["COCONUT"] - curr_pos
-        bid_limit = self.POSITION_LIMITS["COCONUT"] + curr_pos
-
-        best_ask = list(order_depth.sell_orders.items())[0][0] if len(order_depth.sell_orders) > 0 else float('inf')
-        best_bid = list(order_depth.buy_orders.items())[0][0] if len(order_depth.buy_orders) > 0 else 0
-
-        if target_amt > 0:
-            orders.append(Order("COCONUT", best_ask, min(target_amt, ask_limit)))
-        elif target_amt < 0:
-            orders.append(Order("COCONUT", best_bid, -min(bid_limit, abs(target_amt))))
-
-        logger.print(f"coupons delta is {delta}.")
         return orders
 
     def run(self, state: TradingState):
@@ -604,8 +549,6 @@ class Trader:
                 res = self.gift_basket_algo(state, order_depth, price_history)
             elif product == "ROSES":
                 res = self.rose_algo(state, order_depth)
-            # elif product == "COCONUT":
-            #     res = self.coconut_algo(state, order_depth, price_history)
             elif product == "COCONUT_COUPON":
                 res = self.coconut_coupon_algo(state, order_depth, price_history)
 
