@@ -482,23 +482,7 @@ class Trader:
 
         # update positions
         positions = data["positions"]
-        for product, trades in state.market_trades.items():
-            if product not in positions:
-                positions[product] = {}
-
-            for trade in trades:
-                if trade.timestamp != state.timestamp - self.TIMESTAMP_INTERVAL:
-                    continue
-
-                if trade.buyer not in positions[product]:
-                    positions[product][trade.buyer] = 0
-                if trade.seller not in positions[product]:
-                    positions[product][trade.seller] = 0
-
-                positions[product][trade.buyer] += trade.quantity
-                positions[product][trade.seller] -= trade.quantity
-
-        for product, trades in state.own_trades.items():
+        for product, trades in list(state.market_trades.items()) + list(state.own_trades.items()):
             if product not in positions:
                 positions[product] = {}
 
