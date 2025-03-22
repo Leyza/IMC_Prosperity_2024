@@ -1,5 +1,7 @@
 # IMC Prosperity 2024
-Scripts created for IMC Prosperity 2024 algorithmic trading competition.
-
+Scripts used for IMC Prosperity 2024 algorithmic trading competition.
+<br/>
+<br/>
 Team: shells_n_beaches
-Final placement: rank 11
+<br/>
+Final placement: 11 / 9140
